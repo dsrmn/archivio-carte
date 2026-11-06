@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Archivio Carte</title>
+<meta name="theme-color" content="#153a2c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --felt-dark:#0c231b; --felt:#153a2c; --felt-light:#1f4d3a;
+    --paper:#faf3e4; --paper-dim:#f0e6d2;
+    --ink:#241f16; --ink-soft:#5c5445;
+    --gold:#c7a542; --gold-deep:#a3822f;
+    --green-pos:#2f6f4e; --red-neg:#a8402c;
+    --line:#e2d6ba; --radius:10px;
+    font-variant-numeric: tabular-nums;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;min-height:100vh;
+    background:radial-gradient(1200px 600px at 10% -10%, var(--felt-light), transparent 60%),
+      linear-gradient(160deg, var(--felt-dark), var(--felt) 70%);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink); padding:28px 20px 60px;}
+  h1,h2,h3{font-family:Iowan Old Style,Palatino Linotype,Georgia,serif; margin:0;}
+  .wrap{max-width:1280px;margin:0 auto;}
+  header.top{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;color:var(--paper);}
+  header.top h1{font-size:1.9rem;font-weight:700;letter-spacing:.3px;}
+  header.top h1 span{color:var(--gold);}
+  header.top p{margin:2px 0 0;color:#cfe0d6;font-size:.92rem;}
+
+  .main-tabs{display:flex;gap:8px;margin-bottom:18px;}
+  .main-tab{padding:9px 18px;border-radius:9px 9px 0 0;border:none;background:rgba(250,243,228,.35);color:var(--paper);font-weight:600;cursor:pointer;font-size:.92rem;}
+  .main-tab.active{background:var(--paper);color:var(--felt);}
+
+  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px;}
+  .stat{background:var(--paper);border-radius:var(--radius);padding:14px 16px;border-top:3px solid var(--gold);box-shadow:0 6px 18px rgba(0,0,0,.18);}
+  .stat .label{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);}
+  .stat .value{font-size:1.3rem;font-weight:700;margin-top:2px;}
+  .stat .value.pos{color:var(--green-pos);} .stat .value.neg{color:var(--red-neg);}
+
+  .toolrow{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-bottom:16px;}
+  .layout{display:grid;grid-template-columns:300px 1fr;gap:18px;align-items:start;}
+  .layout > *{min-width:0;}
+  @media (max-width:900px){.layout{grid-template-columns:1fr;} .stats{grid-template-columns:repeat(2,1fr);}}
+
+  .panel{background:var(--paper);border-radius:var(--radius);padding:18px;box-shadow:0 6px 18px rgba(0,0,0,.18);margin-bottom:16px;min-width:0;overflow:hidden;}
+  .panel h2{font-size:1.1rem;margin-bottom:10px;}
+  .panel h2 small{display:block;font-family:inherit;font-size:.7rem;color:var(--ink-soft);text-transform:none;font-weight:400;margin-top:2px;}
+
+  form{min-width:0;}
+  form .field{margin-bottom:9px;display:flex;flex-direction:column;gap:4px;min-width:0;}
+  form label{font-size:.74rem;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;}
+  form input,form select,form textarea{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--ink);width:100%;max-width:100%;box-sizing:border-box;min-width:0;}
+  form textarea{resize:vertical;min-height:36px;}
+  form input:focus,form select:focus,form textarea:focus{outline:2px solid var(--gold);outline-offset:1px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;min-width:0;}
+  .row2 .field{min-width:0;}
+  fieldset{border:1px dashed var(--line);border-radius:8px;padding:10px 10px 4px;margin:10px 0;min-width:0;}
+  fieldset legend{font-size:.74rem;color:var(--gold-deep);text-transform:uppercase;letter-spacing:.04em;padding:0 4px;}
+  .checkrow{display:flex;align-items:center;gap:7px;margin:8px 0;font-size:.85rem;}
+  .checkrow input{width:auto;}
+
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;border-radius:7px;padding:8px 13px;font-weight:600;font-size:.85rem;cursor:pointer;transition:filter .15s;}
+  .btn:hover{filter:brightness(1.08);}
+  .btn-primary{background:var(--felt);color:var(--paper);width:100%;}
+  .btn-ghost{background:#fff;color:var(--ink-soft);border:1px solid var(--line);}
+  .btn-danger{background:transparent;color:var(--red-neg);}
+  .btn-small{padding:5px 9px;font-size:.76rem;}
+
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;}
+  .tab{padding:6px 12px;border-radius:20px;border:1px solid var(--line);background:#fff;font-size:.8rem;cursor:pointer;color:var(--ink-soft);}
+  .tab.active{background:var(--felt);color:var(--paper);border-color:var(--felt);}
+  .search{padding:7px 10px;border:1px solid var(--line);border-radius:20px;font:inherit;min-width:150px;}
+  select.filter{padding:7px 10px;border:1px solid var(--line);border-radius:20px;font:inherit;background:#fff;}
+
+  table{width:100%;border-collapse:collapse;font-size:.84rem;}
+  thead th{text-align:left;font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);border-bottom:2px solid var(--line);padding:8px 6px;white-space:nowrap;}
+  tbody td{padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:top;}
+  tbody tr:hover{background:var(--paper-dim);}
+  .badge{padding:2px 8px;border-radius:20px;font-size:.68rem;font-weight:600;white-space:nowrap;}
+  .badge.disp{background:#e4efe8;color:var(--green-pos);}
+  .badge.vend{background:#f1e6cf;color:var(--gold-deep);}
+  .badge.rim{background:#f1dcd6;color:var(--red-neg);}
+  .lot-badge{display:inline-block;margin-left:5px;font-size:.65rem;background:#e7e1f5;color:#5a4a9e;padding:1px 6px;border-radius:10px;}
+  .profit.pos{color:var(--green-pos);font-weight:700;} .profit.neg{color:var(--red-neg);font-weight:700;}
+  .rowbtns{display:flex;gap:5px;flex-wrap:wrap;}
+  .empty{padding:30px 10px;text-align:center;color:var(--ink-soft);}
+  .tablewrap{overflow-x:auto;}
+  .qty{font-weight:700;}
+  .pager{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:12px;font-size:.84rem;color:var(--ink-soft);}
+
+  .group-card{border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px;}
+  .group-card h3{font-size:1rem;margin-bottom:2px;}
+  .group-card .game-tag{font-size:.68rem;color:var(--gold-deep);text-transform:uppercase;letter-spacing:.04em;}
+  .group-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;font-size:.8rem;margin-top:8px;}
+  .group-grid div span{display:block;color:var(--ink-soft);font-size:.64rem;text-transform:uppercase;}
+  @media (max-width:700px){.group-grid{grid-template-columns:repeat(2,1fr);}}
+
+  .lot-item{border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-bottom:8px;font-size:.82rem;}
+  .lot-item .lot-head{display:flex;justify-content:space-between;align-items:center;font-weight:600;}
+  .lot-item .lot-sub{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:5px;font-size:.74rem;color:var(--ink-soft);}
+  .lot-item .lot-sub b{color:var(--ink);}
+
+  .hint{font-size:.74rem;color:var(--ink-soft);margin-top:6px;line-height:1.4;}
+  .loading{color:var(--paper);text-align:center;padding:30px;}
+
+  .modal-backdrop{position:fixed;inset:0;background:rgba(12,35,27,.55);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px;}
+  .modal{background:var(--paper);border-radius:var(--radius);padding:22px;max-width:420px;width:100%;box-shadow:0 12px 30px rgba(0,0,0,.3);}
+  .modal h3{margin-bottom:8px;}
+  .modal p{font-size:.86rem;color:var(--ink-soft);line-height:1.5;margin-bottom:14px;}
+  .modal .btn{width:100%;margin-bottom:8px;}
+  .import-summary{font-size:.85rem;background:var(--paper-dim);border-radius:7px;padding:8px 10px;margin-bottom:14px;}
+
+  .month-table th,.month-table td{padding:8px;}
+  .bar-wrap{background:var(--paper-dim);border-radius:4px;height:10px;width:140px;overflow:hidden;}
+  .bar{height:100%;background:var(--gold);}
+  .bar.neg{background:var(--red-neg);}
+  .hidden{display:none !important;}
+
+  /* ---- sincronizzazione ---- */
+  .sync-chip{border:1px solid rgba(250,243,228,.5);background:transparent;color:var(--paper);border-radius:20px;padding:6px 14px;font-size:.8rem;cursor:pointer;font-weight:600;}
+  .sync-chip.ok{border-color:#7fc9a0;color:#bfeed3;}
+  .sync-chip.busy{border-color:var(--gold);color:var(--gold);}
+  .sync-chip.warn{border-color:#e39a86;color:#f3c3b6;}
+  .acct-msg{font-size:.82rem;color:var(--red-neg);min-height:1.1em;margin-bottom:8px;}
+  .modal .field{display:flex;flex-direction:column;gap:4px;margin-bottom:9px;}
+  .modal .field label{font-size:.74rem;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;}
+  .modal .field input{font:inherit;padding:8px 9px;border:1px solid var(--line);border-radius:7px;width:100%;}
+
+  /* ---- telefono: tabella a schede ---- */
+  @media (max-width:700px){
+    body{padding:16px 10px 40px;}
+    form input,form select,form textarea,.modal .field input{font-size:16px;}
+    .tablewrap{overflow:visible;}
+    table.cards-table, table.cards-table tbody{display:block;}
+    table.cards-table thead{display:none;}
+    table.cards-table tr{display:block;border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:10px;background:#fff;}
+    table.cards-table td{display:flex;justify-content:space-between;gap:12px;border:none;padding:4px 0;text-align:right;}
+    table.cards-table td::before{content:attr(data-label);color:var(--ink-soft);font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;text-align:left;flex-shrink:0;padding-top:2px;}
+    table.cards-table td:first-child{display:block;text-align:left;border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:4px;}
+    table.cards-table td:first-child::before{display:none;}
+    table.cards-table td:last-child{display:block;text-align:left;padding-top:8px;}
+    table.cards-table td:last-child::before{display:none;}
+    .btn-small{padding:8px 12px;font-size:.82rem;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Archivio <span>Carte</span></h1>
+      <p>Copie possedute, lotti, acquisti e vendite — Pokémon, Yu-Gi-Oh! e altro</p>
+    </div>
+    <button class="sync-chip" id="sync-chip" type="button">☁ Accedi per sincronizzare</button>
+  </header>
+
+  <div class="main-tabs">
+    <button class="main-tab active" data-tab="collezione">Collezione</button>
+    <button class="main-tab" data-tab="guadagni">Guadagni mensili</button>
+  </div>
+
+  <!-- ===================== TAB COLLEZIONE ===================== -->
+  <div id="tab-collezione">
+    <p id="stats-subtitle" style="color:var(--gold);font-size:.82rem;font-weight:600;margin:0 0 6px 2px;"></p>
+    <div class="stats" id="stats"></div>
+
+    <div class="toolrow">
+      <button class="btn btn-ghost btn-small" id="clear-all-btn" type="button" style="color:var(--red-neg);">Elimina tutto</button>
+      <button class="btn btn-ghost btn-small" id="undo-btn" type="button" disabled style="opacity:.5;">Annulla ultima modifica</button>
+      <button class="btn btn-ghost btn-small" id="merge-dup-btn" type="button">Unisci caselle duplicate</button>
+      <button class="btn btn-ghost btn-small" id="export-json-btn" type="button">Esporta backup (JSON)</button>
+      <button class="btn btn-ghost btn-small" id="export-excel-btn" type="button">Esporta in Excel</button>
+      <button class="btn btn-ghost btn-small" id="import-btn" type="button">Importa da Excel</button>
+      <button class="btn btn-ghost btn-small" id="import-json-btn" type="button">Importa da JSON</button>
+      <input type="file" id="import-file" accept=".xlsx,.xls" style="display:none;">
+      <input type="file" id="import-json-file" accept=".json" style="display:none;">
+    </div>
+
+    <div class="layout">
+      <div>
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <h2 style="margin:0;">Carte</h2>
+            <button type="button" class="btn btn-primary btn-small" id="toggle-form-btn" style="width:auto;">+ Aggiungi carta</button>
+          </div>
+          <div id="form-container" class="hidden" style="margin-top:12px;">
+          <h2 id="form-title">Aggiungi carta</h2>
+          <form id="card-form">
+            <div class="field">
+              <label>Gioco</label>
+              <select id="f-game"><option>Yu-Gi-Oh!</option><option>Pokémon</option><option>One Piece</option><option>Altro</option></select>
+            </div>
+            <div class="field"><label>Nome carta *</label><input type="text" id="f-name" required placeholder="es. Dark Magician"></div>
+            <div class="row2">
+              <div class="field"><label>Edizione</label><input type="text" id="f-edition" placeholder="es. LOB"></div>
+              <div class="field"><label>Set / codice</label><input type="text" id="f-set" placeholder="es. LOB-001"></div>
+            </div>
+            <div class="row2">
+              <div class="field"><label>Rarità</label><input type="text" id="f-rarity" placeholder="es. Ultra Rara"></div>
+              <div class="field">
+                <label>Condizione</label>
+                <select id="f-condition">
+                  <option value="">—</option><option>Mint</option><option>Near Mint</option><option>Excellent</option>
+                  <option>Good</option><option>Light Played</option><option>Played</option><option>Poor</option>
+                </select>
+              </div>
+            </div>
+            <div class="field"><label>Quantità</label><input type="number" min="1" step="1" id="f-qty" value="1"></div>
+
+            <label class="checkrow"><input type="checkbox" id="f-is-lot"> Fa parte di un lotto</label>
+            <div class="field" id="lot-select-wrap" style="display:none;">
+              <label>Lotto</label>
+              <select id="f-lot"></select>
+            </div>
+
+            <fieldset id="purchase-fields">
+              <legend>Acquisto</legend>
+              <div class="row2">
+                <div class="field"><label>Data</label><input type="date" id="f-pdate"></div>
+                <div class="field"><label>Prezzo totale (€)</label><input type="number" step="0.01" min="0" id="f-pprice"></div>
+              </div>
+              <div class="field">
+                <label>Piattaforma</label>
+                <select id="f-pplatform">
+                  <option value="">—</option><option>Cardmarket</option><option>Cardtrader</option><option>Vinted</option>
+                  <option>Fiera</option><option>IRL</option><option>Altro</option>
+                </select>
+              </div>
+            </fieldset>
+            <p class="hint" id="lot-cost-hint" style="display:none;">Il costo di questa carta è compreso nel prezzo totale del lotto, non va inserito qui.</p>
+
+            <div class="field">
+              <label>Stato</label>
+              <select id="f-status">
+                <option value="Disponibile">Disponibile</option>
+                <option value="Venduto">Venduto</option>
+                <option value="Rimossa">Rimossa</option>
+              </select>
+            </div>
+
+            <fieldset id="sale-fields">
+              <legend>Vendita</legend>
+              <div class="row2">
+                <div class="field"><label>Data</label><input type="date" id="f-sdate"></div>
+                <div class="field"><label>Prezzo totale (€)</label><input type="number" step="0.01" min="0" id="f-sprice"></div>
+              </div>
+              <div class="field">
+                <label>Piattaforma</label>
+                <select id="f-splatform">
+                  <option value="">—</option><option>Cardmarket</option><option>Cardtrader</option><option>Vinted</option>
+                  <option>Fiera</option><option>IRL</option><option>Altro</option>
+                </select>
+              </div>
+            </fieldset>
+
+            <div class="field"><label>Note</label><textarea id="f-note" placeholder="facoltativo"></textarea></div>
+
+            <button type="submit" class="btn btn-primary" id="submit-btn">Aggiungi carta</button>
+            <button type="button" class="btn btn-ghost" id="cancel-edit" style="display:none;width:100%;margin-top:6px;">Annulla modifica</button>
+          </form>
+          <p class="hint">Se aggiungi copie disponibili uguali a una carta già presente (stesso nome, edizione e rarità), vengono unite automaticamente nella stessa riga.</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Lotti <small>Carte comprate insieme a un prezzo unico: il guadagno si calcola sul totale del lotto, non carta per carta.</small></h2>
+          <form id="lot-form">
+            <div class="field"><label>Descrizione *</label><input type="text" id="l-desc" required placeholder="es. Lotto da collezionista privato"></div>
+            <div class="row2">
+              <div class="field"><label>Data acquisto</label><input type="date" id="l-date"></div>
+              <div class="field"><label>Prezzo totale (€)</label><input type="number" step="0.01" min="0" id="l-cost"></div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-small">Aggiungi lotto</button>
+          </form>
+          <div id="lots-list" style="margin-top:12px;"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="tabs" id="game-tabs" style="margin-bottom:10px;">
+          <button class="tab active" data-game="Tutti">Tutti i giochi</button>
+        </div>
+        <div class="toolbar">
+          <div class="tabs" id="status-tabs">
+            <button class="tab active" data-status="Tutte">Tutte</button>
+            <button class="tab" data-status="Disponibile">Disponibili</button>
+            <button class="tab" data-status="Venduto">Vendute</button>
+            <button class="tab" data-status="Rimossa">Rimosse</button>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <input type="text" class="search" id="search" placeholder="Cerca per nome...">
+            <div class="view-toggle" style="display:flex;gap:6px;">
+              <button class="tab active" data-view="table">Elenco</button>
+              <button class="tab" data-view="grouped">Per carta</button>
+            </div>
+          </div>
+        </div>
+        <div id="content"><div class="loading">Caricamento archivio…</div></div>
+        <div class="pager" id="pager" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== TAB GUADAGNI MENSILI ===================== -->
+  <div id="tab-guadagni" class="hidden">
+    <div class="panel">
+      <h2>Guadagni mensili <small>Speso e incassato per mese (in base a data di acquisto e data di vendita), lotti inclusi.</small></h2>
+      <div class="tablewrap">
+        <table class="month-table">
+          <thead><tr><th>Mese</th><th>Speso</th><th>Incassato</th><th>Profitto</th><th></th></tr></thead>
+          <tbody id="month-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="import-modal">
+  <div class="modal">
+    <h3>Importa carte</h3>
+    <div class="import-summary" id="import-summary"></div>
+    <p>Vuoi aggiungere queste carte a quelle già presenti, oppure sostituire completamente l'archivio attuale?</p>
+    <button class="btn btn-primary" id="import-merge">Aggiungi alle carte esistenti</button>
+    <button class="btn btn-ghost" id="import-replace">Sostituisci tutto l'archivio</button>
+    <button class="btn btn-danger" id="import-cancel">Annulla</button>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="sell-modal">
+  <div class="modal">
+    <h3>Registra vendita</h3>
+    <p id="sell-info"></p>
+    <div class="field"><label>Quantità venduta</label><input type="number" min="1" id="sell-qty"></div>
+    <div class="field"><label>Prezzo totale di vendita (€)</label><input type="number" min="0" step="0.01" id="sell-price"></div>
+    <div class="field"><label>Data vendita</label><input type="date" id="sell-date"></div>
+    <div class="field">
+      <label>Piattaforma</label>
+      <select id="sell-platform"><option value="">—</option><option>Cardmarket</option><option>Cardtrader</option><option>Vinted</option><option>Fiera</option><option>IRL</option><option>Altro</option></select>
+    </div>
+    <button class="btn btn-primary" id="sell-confirm">Conferma vendita</button>
+    <button class="btn btn-ghost" id="sell-cancel">Annulla</button>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="account-modal">
+  <div class="modal">
+    <h3>Account e sincronizzazione</h3>
+    <div id="acct-logged-out">
+      <p>Accedi per avere lo stesso archivio su PC e telefono. Senza accesso l'archivio resta solo su questo dispositivo.</p>
+      <div id="acct-config">
+        <div class="field"><label>Indirizzo del progetto Supabase</label><input type="url" id="sb-url" placeholder="https://xxxx.supabase.co"></div>
+        <div class="field"><label>Chiave pubblica (anon)</label><input type="text" id="sb-key" placeholder="eyJ..."></div>
+      </div>
+      <div class="field"><label>Email</label><input type="email" id="sb-email" autocomplete="username"></div>
+      <div class="field"><label>Password (min. 6 caratteri)</label><input type="password" id="sb-pass" autocomplete="current-password"></div>
+      <div class="acct-msg" id="sb-msg"></div>
+      <button class="btn btn-primary" id="sb-login">Accedi</button>
+      <button class="btn btn-ghost" id="sb-signup">Crea account</button>
+    </div>
+    <div id="acct-logged-in" class="hidden">
+      <div class="import-summary" id="acct-info"></div>
+      <button class="btn btn-primary" id="sb-sync-now">Sincronizza ora</button>
+      <button class="btn btn-ghost" id="sb-logout">Esci da questo dispositivo</button>
+    </div>
+    <button class="btn btn-ghost" id="sb-close">Chiudi</button>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="confirm-modal">
+  <div class="modal">
+    <h3>Conferma</h3>
+    <p id="confirm-text"></p>
+    <button class="btn btn-primary" id="confirm-ok">Conferma</button>
+    <button class="btn btn-ghost" id="confirm-cancel">Annulla</button>
+  </div>
+</div>
+<div id="toast" class="hidden" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--felt);color:var(--paper);padding:10px 18px;border-radius:8px;font-size:.88rem;z-index:80;box-shadow:0 6px 18px rgba(0,0,0,.3);max-width:90vw;"></div>
+
+<script>
+const STORAGE_KEY = "archivio-carte-v1";
+const LOTS_KEY = "archivio-lotti-v1";
+const SEED_CARDS = [];
+const SEED_LOTS = [];
+
+let cards = [];
+let lots = [];
+let editingId = null;
+let currentStatus = "Tutte";
+let currentGame = "Tutti";
+let currentView = "table";
+let searchTerm = "";
+let currentPage = 1;
+const PAGE_SIZE = 60;
+let pendingImport = [];
+let sellTargetId = null;
+
+const $ = (sel) => document.querySelector(sel);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const todayStr = () => new Date().toISOString().slice(0,10);
+
+// Dialoghi interni alla pagina (confirm/alert nativi possono essere bloccati dal browser)
+function askConfirm(message, okLabel, cancelLabel){
+  return new Promise(resolve=>{
+    $("#confirm-text").textContent = message;
+    $("#confirm-ok").textContent = okLabel || "Conferma";
+    $("#confirm-cancel").textContent = cancelLabel || "Annulla";
+    $("#confirm-modal").classList.remove("hidden");
+    const done = (val)=>{
+      $("#confirm-modal").classList.add("hidden");
+      $("#confirm-ok").onclick = null; $("#confirm-cancel").onclick = null;
+      resolve(val);
+    };
+    $("#confirm-ok").onclick = ()=>done(true);
+    $("#confirm-cancel").onclick = ()=>done(false);
+  });
+}
+let toastTimer;
+function notify(message){
+  const t = $("#toast"); t.textContent = message; t.classList.remove("hidden");
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.classList.add("hidden"), 3500);
+}
+
+function euro(n){
+  if(n===null||n===undefined||n==="") return "—";
+  return Number(n).toLocaleString("it-IT",{style:"currency",currency:"EUR"});
+}
+function escapeHtml(s){
+  return (s??"").toString().replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function profitOf(c){
+  if(c.status === "Venduto" && c.sprice !== "" && c.sprice !== null && c.sprice !== undefined){
+    const cost = c.lotId ? 0 : (Number(c.pprice)||0);
+    return Number(c.sprice) - cost;
+  }
+  return null;
+}
+
+// ---------- Persistenza ----------
+function loadAll(){
+  try{
+    const rawC = localStorage.getItem(STORAGE_KEY);
+    cards = rawC ? JSON.parse(rawC) : SEED_CARDS.slice();
+    const rawL = localStorage.getItem(LOTS_KEY);
+    lots = rawL ? JSON.parse(rawL) : SEED_LOTS.slice();
+    lastSnapshot = JSON.stringify({cards, lots});
+    if(!rawC || !rawL) saveAll();
+  }catch(e){
+    cards = SEED_CARDS.slice(); lots = SEED_LOTS.slice();
+    lastSnapshot = JSON.stringify({cards, lots});
+  }
+  populateGameFilter();
+  populateLotSelect();
+  render();
+  renderLots();
+  renderMonthly();
+}
+// ---------- Annulla ultima modifica ----------
+let lastSnapshot = null;
+const undoStack = [];
+const UNDO_LIMIT = 30;
+function updateUndoBtn(){
+  const b = $("#undo-btn"); if(!b) return;
+  b.disabled = undoStack.length === 0;
+  b.textContent = undoStack.length ? `Annulla ultima modifica (${undoStack.length})` : "Annulla ultima modifica";
+  b.style.opacity = undoStack.length ? "1" : ".5";
+}
+function undoLast(){
+  if(!undoStack.length) return;
+  const snap = JSON.parse(undoStack.pop());
+  cards = snap.cards; lots = snap.lots;
+  lastSnapshot = JSON.stringify({cards, lots});
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+    localStorage.setItem(LOTS_KEY, JSON.stringify(lots));
+  }catch(e){}
+  markDirty();
+  resetForm(); closeFormPanel();
+  populateGameFilter(); populateLotSelect(); render(); renderLots(); renderMonthly();
+  updateUndoBtn();
+  notify("Ultima modifica annullata.");
+}
+function saveAll(){
+  const snap = JSON.stringify({cards, lots});
+  if(lastSnapshot !== null && lastSnapshot !== snap){
+    undoStack.push(lastSnapshot);
+    if(undoStack.length > UNDO_LIMIT) undoStack.shift();
+  }
+  lastSnapshot = snap;
+  updateUndoBtn();
+  markDirty();
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+    localStorage.setItem(LOTS_KEY, JSON.stringify(lots));
+  }catch(e){
+    notify("Attenzione: non sono riuscito a salvare nel browser (spazio esaurito?). Esporta un backup per non perdere i dati.");
+  }
+}
+
+// ---------- Unione copie disponibili identiche ----------
+function cardKey(c){
+  return [c.game||"", (c.name||"").trim().toLowerCase(), (c.edition||"").trim().toLowerCase(), (c.rarity||"").trim().toLowerCase()].join("||");
+}
+// Storico acquisti dentro ogni casella: ogni acquisto conserva data, prezzo, piattaforma e quantità
+const round2 = (n) => Math.round(n*100)/100;
+function purchasesOf(c){
+  if(Array.isArray(c.purchases) && c.purchases.length) return c.purchases;
+  if(c.lotId) return [];
+  return [{date:c.pdate||"", price:Number(c.pprice)||0, platform:c.pplatform||"", qty:Number(c.quantity)||1}];
+}
+function absorb(existing, incoming){
+  const all = purchasesOf(existing).concat(purchasesOf(incoming));
+  existing.quantity = (Number(existing.quantity)||1) + (Number(incoming.quantity)||1);
+  if(!existing.lotId){
+    existing.purchases = all;
+    existing.pprice = round2(all.reduce((s,p)=>s+(Number(p.price)||0),0));
+    existing.pdate = all.map(p=>p.date).filter(Boolean).sort()[0] || "";
+  }
+  if(incoming.note && !(existing.note||"").includes(incoming.note)){
+    existing.note = existing.note ? existing.note + " | " + incoming.note : incoming.note;
+  }
+}
+function addOrMergeCard(newCard){
+  if(newCard.status === "Disponibile"){
+    const key = cardKey(newCard);
+    const lotKey = newCard.lotId || null;
+    const existing = cards.find(c => c.status==="Disponibile" && cardKey(c)===key && (c.lotId||null)===lotKey);
+    if(existing){
+      absorb(existing, newCard);
+      return existing;
+    }
+  }
+  newCard.id = newCard.id || uid();
+  cards.push(newCard);
+  return newCard;
+}
+function mergeAllDuplicates(){
+  const byKey = {};
+  const result = [];
+  let merges = 0;
+  cards.forEach(c=>{
+    if(c.status === "Disponibile"){
+      const key = cardKey(c) + "||" + (c.lotId||"");
+      if(byKey[key]){
+        absorb(byKey[key], c);
+        merges++;
+        return;
+      }
+      byKey[key] = c;
+    }
+    result.push(c);
+  });
+  cards = result;
+  return merges;
+}
+$("#merge-dup-btn").addEventListener("click", ()=>{
+  const merges = mergeAllDuplicates();
+  if(merges === 0){
+    notify("Nessuna casella duplicata trovata: va già tutto bene.");
+    return;
+  }
+  saveAll(); populateGameFilter(); render(); renderMonthly();
+  notify(`Unite ${merges} caselle duplicate.`);
+});
+
+// ---------- Tab principali ----------
+document.querySelectorAll(".main-tab").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll(".main-tab").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    const tab = btn.dataset.tab;
+    $("#tab-collezione").classList.toggle("hidden", tab!=="collezione");
+    $("#tab-guadagni").classList.toggle("hidden", tab!=="guadagni");
+    if(tab==="guadagni") renderMonthly();
+  });
+});
+
+// ---------- Form carta ----------
+function populateGameFilter(){
+  const el = $("#game-tabs");
+  const games = Array.from(new Set(cards.map(c=>c.game).filter(Boolean))).sort();
+  if(!games.includes(currentGame)) currentGame = "Tutti";
+  el.innerHTML = [`<button class="tab${currentGame==="Tutti"?" active":""}" data-game="Tutti">Tutti i giochi</button>`]
+    .concat(games.map(g=>`<button class="tab${currentGame===g?" active":""}" data-game="${escapeHtml(g)}">${escapeHtml(g)}</button>`))
+    .join("");
+  el.querySelectorAll(".tab").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      el.querySelectorAll(".tab").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      currentGame = btn.dataset.game;
+      currentPage = 1;
+      render();
+    });
+  });
+}
+function populateLotSelect(){
+  const sel = $("#f-lot");
+  sel.innerHTML = lots.map(l=>`<option value="${l.id}">${escapeHtml(l.description)}</option>`).join("") || `<option value="">Nessun lotto creato</option>`;
+}
+
+function resetForm(){
+  editingId = null;
+  $("#card-form").reset();
+  $("#f-qty").value = 1; $("#f-status").value = "Disponibile"; $("#f-game").value = "Yu-Gi-Oh!";
+  $("#f-is-lot").checked = false;
+  $("#form-title").textContent = "Aggiungi carta";
+  $("#submit-btn").textContent = "Aggiungi carta";
+  $("#cancel-edit").style.display = "none";
+  toggleSaleFields(); toggleLotFields();
+}
+function toggleSaleFields(){ $("#sale-fields").style.display = $("#f-status").value === "Venduto" ? "block" : "none"; }
+function toggleLotFields(){
+  const isLot = $("#f-is-lot").checked;
+  $("#lot-select-wrap").style.display = isLot ? "block" : "none";
+  $("#purchase-fields").style.display = isLot ? "none" : "block";
+  $("#lot-cost-hint").style.display = isLot ? "block" : "none";
+}
+$("#f-is-lot").addEventListener("change", toggleLotFields);
+$("#f-status").addEventListener("change", toggleSaleFields);
+
+function openFormPanel(){
+  $("#form-container").classList.remove("hidden");
+  $("#toggle-form-btn").textContent = "Chiudi";
+}
+function closeFormPanel(){
+  $("#form-container").classList.add("hidden");
+  $("#toggle-form-btn").textContent = "+ Aggiungi carta";
+}
+$("#toggle-form-btn").addEventListener("click", ()=>{
+  if($("#form-container").classList.contains("hidden")){
+    resetForm();
+    openFormPanel();
+  }else{
+    resetForm();
+    closeFormPanel();
+  }
+});
+
+function fillFormForEdit(c){
+  openFormPanel();
+  editingId = c.id;
+  $("#f-game").value = c.game || "Yu-Gi-Oh!";
+  $("#f-name").value = c.name || "";
+  $("#f-edition").value = c.edition || "";
+  $("#f-set").value = c.set || "";
+  $("#f-rarity").value = c.rarity || "";
+  $("#f-condition").value = c.condition || "";
+  $("#f-qty").value = c.quantity || 1;
+  $("#f-is-lot").checked = !!c.lotId;
+  if(c.lotId) $("#f-lot").value = c.lotId;
+  $("#f-pdate").value = c.pdate || "";
+  $("#f-pprice").value = c.pprice ?? "";
+  $("#f-pplatform").value = c.pplatform || "";
+  $("#f-status").value = c.status || "Disponibile";
+  $("#f-sdate").value = c.sdate || "";
+  $("#f-sprice").value = c.sprice ?? "";
+  $("#f-splatform").value = c.splatform || "";
+  $("#f-note").value = c.note || "";
+  $("#form-title").textContent = "Modifica carta";
+  $("#submit-btn").textContent = "Salva modifiche";
+  $("#cancel-edit").style.display = "block";
+  toggleSaleFields(); toggleLotFields();
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+window.fillFormForEdit = fillFormForEdit;
+function editById(id){ const c = cards.find(x=>x.id===id); if(c) fillFormForEdit(c); }
+window.editById = editById;
+
+async function deleteCard(id){
+  if(!(await askConfirm("Eliminare questa riga dall'archivio?", "Elimina"))) return;
+  cards = cards.filter(c => c.id !== id);
+  saveAll(); populateGameFilter(); render(); renderMonthly();
+}
+window.deleteCard = deleteCard;
+
+$("#card-form").addEventListener("submit", (e)=>{
+  e.preventDefault();
+  const name = $("#f-name").value.trim();
+  if(!name) return;
+  const isLot = $("#f-is-lot").checked;
+  const data = {
+    id: editingId || undefined,
+    game: $("#f-game").value,
+    name,
+    edition: $("#f-edition").value.trim(),
+    set: $("#f-set").value.trim(),
+    rarity: $("#f-rarity").value.trim(),
+    condition: $("#f-condition").value,
+    quantity: Number($("#f-qty").value) || 1,
+    lotId: isLot ? $("#f-lot").value : null,
+    pdate: isLot ? "" : $("#f-pdate").value,
+    pprice: isLot ? "" : ($("#f-pprice").value === "" ? "" : Number($("#f-pprice").value)),
+    pplatform: isLot ? "" : $("#f-pplatform").value,
+    status: $("#f-status").value,
+    sdate: $("#f-sdate").value,
+    sprice: $("#f-sprice").value === "" ? "" : Number($("#f-sprice").value),
+    splatform: $("#f-splatform").value,
+    note: $("#f-note").value.trim(),
+  };
+  if(editingId){
+    const orig = cards.find(c=>c.id===editingId);
+    if(orig && Array.isArray(orig.purchases) && orig.purchases.length>1 && !data.lotId){
+      const sum = round2(orig.purchases.reduce((s,p)=>s+(Number(p.price)||0),0));
+      if(Math.abs(sum-(Number(data.pprice)||0))<0.005 && (Number(orig.quantity)||1)===data.quantity && (orig.pdate||"")===data.pdate){
+        data.purchases = orig.purchases;
+      }
+    }
+    if(data.status === "Disponibile"){
+      const key = cardKey(data);
+      const lotKey = data.lotId || null;
+      const other = cards.find(c => c.id !== editingId && c.status==="Disponibile" && cardKey(c)===key && (c.lotId||null)===lotKey);
+      if(other){
+        absorb(other, data);
+        cards = cards.filter(c => c.id !== editingId);
+      }else{
+        cards = cards.map(c => c.id === editingId ? data : c);
+      }
+    }else{
+      cards = cards.map(c => c.id === editingId ? data : c);
+    }
+  }else{
+    addOrMergeCard(data);
+  }
+  saveAll(); populateGameFilter(); resetForm(); closeFormPanel(); render(); renderMonthly();
+});
+$("#cancel-edit").addEventListener("click", ()=>{ resetForm(); closeFormPanel(); });
+
+// ---------- Lotti ----------
+function lotStats(lotId){
+  const cardsInLot = cards.filter(c=>c.lotId===lotId);
+  const soldQty = cardsInLot.filter(c=>c.status==="Venduto").reduce((s,c)=>s+(Number(c.quantity)||1),0);
+  const incassato = cardsInLot.filter(c=>c.status==="Venduto").reduce((s,c)=>s+(Number(c.sprice)||0),0);
+  return {cardsInLot, soldQty, incassato};
+}
+function renderLots(){
+  const el = $("#lots-list");
+  if(lots.length === 0){ el.innerHTML = `<p class="hint">Nessun lotto registrato.</p>`; return; }
+  el.innerHTML = lots.map(l=>{
+    const {soldQty, incassato} = lotStats(l.id);
+    const guadagno = incassato - (Number(l.totalCost)||0);
+    return `<div class="lot-item">
+      <div class="lot-head"><span>${escapeHtml(l.description)}</span>
+        <button class="btn btn-danger btn-small" onclick="deleteLot('${l.id}')">Elimina</button>
+      </div>
+      <div class="lot-sub">
+        <div>Speso: <b>${euro(l.totalCost)}</b></div>
+        <div>Vendute: <b>${soldQty}</b></div>
+        <div>Guadagno: <b style="color:${guadagno>=0?'var(--green-pos)':'var(--red-neg)'}">${euro(guadagno)}</b></div>
+      </div>
+    </div>`;
+  }).join("");
+}
+async function deleteLot(id){
+  if(!(await askConfirm("Eliminare il lotto? Le carte collegate resteranno in archivio ma senza costo associato.", "Elimina"))) return;
+  lots = lots.filter(l=>l.id!==id);
+  cards.forEach(c=>{ if(c.lotId===id) c.lotId = null; });
+  saveAll(); populateLotSelect(); renderLots(); render(); renderMonthly();
+}
+window.deleteLot = deleteLot;
+
+$("#lot-form").addEventListener("submit", (e)=>{
+  e.preventDefault();
+  const desc = $("#l-desc").value.trim();
+  if(!desc) return;
+  lots.push({
+    id: uid(), description: desc,
+    date: $("#l-date").value,
+    totalCost: $("#l-cost").value === "" ? "" : Number($("#l-cost").value),
+  });
+  saveAll(); $("#lot-form").reset(); populateLotSelect(); renderLots(); renderMonthly();
+});
+
+// ---------- Vendita rapida (gestisce split quantità) ----------
+function openSell(id){
+  const c = cards.find(x=>x.id===id); if(!c) return;
+  sellTargetId = id;
+  const maxQty = Number(c.quantity)||1;
+  $("#sell-info").textContent = `${c.name} — disponibili: ${maxQty}`;
+  $("#sell-qty").value = maxQty; $("#sell-qty").max = maxQty;
+  $("#sell-price").value = "";
+  $("#sell-date").value = todayStr();
+  $("#sell-platform").value = c.pplatform || "";
+  $("#sell-modal").classList.remove("hidden");
+}
+window.openSell = openSell;
+$("#sell-cancel").addEventListener("click", ()=> $("#sell-modal").classList.add("hidden"));
+$("#sell-confirm").addEventListener("click", ()=>{
+  const c = cards.find(x=>x.id===sellTargetId); if(!c) return;
+  const maxQty = Number(c.quantity)||1;
+  const qty = Math.min(maxQty, Math.max(1, parseInt($("#sell-qty").value)||maxQty));
+  const price = Number($("#sell-price").value)||0;
+  const date = $("#sell-date").value || todayStr();
+  const platform = $("#sell-platform").value;
+
+  if(qty >= maxQty){
+    c.status = "Venduto"; c.sdate = date; c.sprice = price; c.splatform = platform;
+  }else{
+    const f = qty/maxQty;
+    const sold = {...c, id: uid(), quantity: qty, status:"Venduto", sdate:date, sprice:price, splatform:platform};
+    if(c.lotId){
+      sold.pprice = "";
+    }else{
+      const ps = purchasesOf(c);
+      const soldPs = ps.map(p=>({...p, qty: Math.round(p.qty*f*10000)/10000, price: round2((Number(p.price)||0)*f)}));
+      const remPs = ps.map((p,i)=>({...p, qty: Math.round((p.qty-soldPs[i].qty)*10000)/10000, price: round2((Number(p.price)||0)-soldPs[i].price)}));
+      sold.purchases = soldPs; sold.pprice = round2(soldPs.reduce((s,p)=>s+p.price,0));
+      c.purchases = remPs; c.pprice = round2(remPs.reduce((s,p)=>s+p.price,0));
+    }
+    c.quantity = maxQty - qty;
+    cards.push(sold);
+  }
+  saveAll(); $("#sell-modal").classList.add("hidden"); render(); renderMonthly();
+});
+
+// ---------- Filtri / tabella ----------
+function statusBadge(status){
+  const cls = status === "Disponibile" ? "disp" : status === "Venduto" ? "vend" : "rim";
+  return `<span class="badge ${cls}">${escapeHtml(status)}</span>`;
+}
+function filteredCards(){
+  return cards.filter(c=>{
+    const okStatus = currentStatus === "Tutte" || c.status === currentStatus;
+    const okGame = currentGame === "Tutti" || c.game === currentGame;
+    const okSearch = !searchTerm || (c.name||"").toLowerCase().includes(searchTerm.toLowerCase());
+    return okStatus && okGame && okSearch;
+  });
+}
+function renderStats(){
+  const scopedCards = currentGame === "Tutti" ? cards : cards.filter(c=>c.game===currentGame);
+  const scopedLots = currentGame === "Tutti" ? lots : lots.filter(l=>cards.some(c=>c.lotId===l.id && c.game===currentGame));
+
+  const inStock = scopedCards.filter(c=>c.status==="Disponibile").reduce((s,c)=>s+(Number(c.quantity)||1),0);
+  const sold = scopedCards.filter(c=>c.status==="Venduto").reduce((s,c)=>s+(Number(c.quantity)||1),0);
+  const spentCards = scopedCards.reduce((s,c)=> s + (Number(c.pprice)||0), 0);
+  const spentLots = scopedLots.reduce((s,l)=> s + (Number(l.totalCost)||0), 0);
+  const earned = scopedCards.reduce((s,c)=> s + (c.status==="Venduto" ? (Number(c.sprice)||0) : 0), 0);
+  const profitCards = scopedCards.reduce((s,c)=>{ const p = profitOf(c); return s + (p||0); }, 0);
+  const profitLots = scopedLots.reduce((s,l)=>{ const {incassato} = lotStats(l.id); return s + (incassato - (Number(l.totalCost)||0)); },0);
+  const profit = profitCards + profitLots;
+
+  $("#stats-subtitle").textContent = currentGame === "Tutti" ? "" : `Statistiche per: ${currentGame}`;
+  $("#stats").innerHTML = `
+    <div class="stat"><div class="label">Copie disponibili</div><div class="value">${inStock}</div></div>
+    <div class="stat"><div class="label">Copie vendute</div><div class="value">${sold}</div></div>
+    <div class="stat"><div class="label">Speso totale</div><div class="value">${euro(spentCards+spentLots)}</div></div>
+    <div class="stat"><div class="label">Incassato totale</div><div class="value">${euro(earned)}</div></div>
+    <div class="stat"><div class="label">Profitto totale</div><div class="value ${profit>=0?'pos':'neg'}">${euro(profit)}</div></div>
+  `;
+}
+function purchaseCell(c){
+  const pc = purchasesOf(c);
+  if(pc.length <= 1){
+    return `${c.pdate||"—"}<br><span style="color:var(--ink-soft);font-size:.74rem;">${escapeHtml(c.pplatform||"—")}</span>`;
+  }
+  const tip = pc.map(p=>`${p.date||"senza data"}: ${Number.isInteger(p.qty)?p.qty+"× — ":""}${euro(p.price)}${p.platform?" ("+p.platform+")":""}`).join("\n");
+  return `<span title="${escapeHtml(tip)}">${c.pdate||"—"}<br><span class="lot-badge" style="margin-left:0;">${pc.length} acquisti</span></span>`;
+}
+function renderTable(){
+  const all = filteredCards();
+  if(all.length === 0){
+    $("#pager").style.display = "none";
+    return `<div class="empty">Nessuna carta qui. ${cards.length===0 ? "Aggiungine una dal modulo a sinistra o importa un file." : "Prova a cambiare filtro o ricerca."}</div>`;
+  }
+  const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+  if(currentPage > totalPages) currentPage = totalPages;
+  const start = (currentPage-1)*PAGE_SIZE;
+  const list = all.slice(start, start+PAGE_SIZE);
+
+  const rows = list.map(c=>{
+    const p = profitOf(c);
+    const profitCell = p===null ? "—" : `<span class="profit ${p>=0?'pos':'neg'}">${euro(p)}</span>`;
+    const titleAttr = c.note ? ` title="${escapeHtml(c.note)}"` : "";
+    const lot = c.lotId ? lots.find(l=>l.id===c.lotId) : null;
+    const pPriceDisplay = c.lotId ? `<span class="lot-badge">lotto</span>` : euro(c.pprice);
+    const sellBtn = c.status==="Disponibile" ? `<button class="btn btn-ghost btn-small" onclick="openSell('${c.id}')">Vendi</button>` : "";
+    return `<tr>
+      <td${titleAttr} data-label="Carta"><strong>${escapeHtml(c.name)}</strong><br><span style="color:var(--ink-soft);font-size:.74rem;">${escapeHtml(c.game||"")}${c.set?" · "+escapeHtml(c.set):""}</span>${lot?`<br><span class="lot-badge">${escapeHtml(lot.description)}</span>`:""}</td>
+      <td data-label="Rarità">${escapeHtml(c.rarity||"—")}</td>
+      <td data-label="Condizione">${escapeHtml(c.condition||"—")}</td>
+      <td data-label="Quantità" class="qty">${c.quantity||1}</td>
+      <td data-label="Stato">${statusBadge(c.status)}</td>
+      <td data-label="Acquisto">${purchaseCell(c)}</td>
+      <td data-label="Prezzo acq.">${pPriceDisplay}</td>
+      <td data-label="Vendita">${c.sdate||"—"}<br><span style="color:var(--ink-soft);font-size:.74rem;">${escapeHtml(c.splatform||"—")}</span></td>
+      <td data-label="Prezzo vend.">${euro(c.sprice)}</td>
+      <td data-label="Profitto">${profitCell}</td>
+      <td><div class="rowbtns">
+        ${sellBtn}
+        <button class="btn btn-ghost btn-small" onclick="editById('${c.id}')">Modifica</button>
+        <button class="btn btn-danger btn-small" onclick="deleteCard('${c.id}')">Elimina</button>
+      </div></td>
+    </tr>`;
+  }).join("");
+
+  $("#pager").style.display = totalPages > 1 ? "flex" : "none";
+  $("#pager").innerHTML = totalPages > 1 ? `
+    <button class="btn btn-ghost btn-small" id="prev-page" ${currentPage===1?"disabled":""}>‹ Precedente</button>
+    <span>Pagina ${currentPage} di ${totalPages} (${all.length} risultati)</span>
+    <button class="btn btn-ghost btn-small" id="next-page" ${currentPage===totalPages?"disabled":""}>Successiva ›</button>` : "";
+
+  return `<div class="tablewrap"><table class="cards-table">
+    <thead><tr><th>Carta</th><th>Rarità</th><th>Cond.</th><th>Qt.</th><th>Stato</th><th>Acquisto</th><th>Prezzo acq.</th><th>Vendita</th><th>Prezzo vend.</th><th>Profitto</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+function renderGrouped(){
+  const list = filteredCards();
+  $("#pager").style.display = "none";
+  if(list.length === 0) return `<div class="empty">Nessuna carta qui.</div>`;
+  const groups = {};
+  list.forEach(c=>{
+    const key = (c.game||"") + "||" + (c.name||"—").trim().toLowerCase();
+    if(!groups[key]) groups[key] = { name: c.name, game: c.game, inStock:0, sold:0, removed:0, spent:0, earned:0, profit:0 };
+    const g = groups[key]; const qty = Number(c.quantity)||1;
+    if(c.status==="Disponibile") g.inStock += qty;
+    if(c.status==="Venduto") g.sold += qty;
+    if(c.status==="Rimossa") g.removed += qty;
+    g.spent += c.lotId ? 0 : (Number(c.pprice)||0);
+    if(c.status==="Venduto") g.earned += Number(c.sprice)||0;
+    const p = profitOf(c); if(p!==null) g.profit += p;
+  });
+  return Object.values(groups).sort((a,b)=> a.name.localeCompare(b.name)).map(g=>`
+    <div class="group-card">
+      <div class="game-tag">${escapeHtml(g.game||"")}</div>
+      <h3>${escapeHtml(g.name)}</h3>
+      <div class="group-grid">
+        <div><span>Disponibili</span>${g.inStock}</div>
+        <div><span>Vendute</span>${g.sold}</div>
+        <div><span>Rimosse</span>${g.removed}</div>
+        <div><span>Speso</span>${euro(g.spent)}</div>
+        <div><span>Profitto</span><span style="color:${g.profit>=0?'var(--green-pos)':'var(--red-neg)'};font-weight:700;">${euro(g.profit)}</span></div>
+      </div>
+    </div>`).join("");
+}
+function render(){
+  renderStats();
+  $("#content").innerHTML = currentView === "table" ? renderTable() : renderGrouped();
+  renderLots();
+  if(currentView === "table"){
+    const prevBtn = $("#prev-page"), nextBtn = $("#next-page");
+    if(prevBtn) prevBtn.addEventListener("click", ()=>{ currentPage--; render(); window.scrollTo({top:0,behavior:"smooth"}); });
+    if(nextBtn) nextBtn.addEventListener("click", ()=>{ currentPage++; render(); window.scrollTo({top:0,behavior:"smooth"}); });
+  }
+}
+document.querySelectorAll("#status-tabs .tab").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll("#status-tabs .tab").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active"); currentStatus = btn.dataset.status; currentPage=1; render();
+  });
+});
+document.querySelectorAll(".view-toggle .tab").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll(".view-toggle .tab").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active"); currentView = btn.dataset.view; currentPage=1; render();
+  });
+});
+$("#search").addEventListener("input", (e)=>{ searchTerm = e.target.value; currentPage=1; render(); });
+
+// ---------- Guadagni mensili ----------
+function renderMonthly(){
+  const months = {};
+  function ensure(m){ if(!months[m]) months[m] = {spent:0, earned:0}; return months[m]; }
+  cards.forEach(c=>{
+    if(!c.lotId){
+      purchasesOf(c).forEach(p=>{
+        if(p.date && p.price) ensure(p.date.slice(0,7)).spent += Number(p.price)||0;
+      });
+    }
+    if(c.status==="Venduto" && c.sdate && c.sprice !== "" && c.sprice !== null){
+      ensure(c.sdate.slice(0,7)).earned += Number(c.sprice)||0;
+    }
+  });
+  lots.forEach(l=>{
+    if(l.date) ensure(l.date.slice(0,7)).spent += Number(l.totalCost)||0;
+  });
+
+  const monthKeys = Object.keys(months).sort();
+  const tbody = $("#month-body");
+  if(monthKeys.length === 0){
+    tbody.innerHTML = `<tr><td colspan="5" class="empty">Nessuna data di acquisto o vendita registrata ancora.</td></tr>`;
+    return;
+  }
+  const maxAbs = Math.max(...monthKeys.map(m=>Math.abs(months[m].earned - months[m].spent)), 1);
+  let totSpent=0, totEarned=0;
+  const rows = monthKeys.map(m=>{
+    const {spent, earned} = months[m];
+    const profit = earned - spent;
+    totSpent += spent; totEarned += earned;
+    const barWidth = Math.min(100, Math.round(Math.abs(profit)/maxAbs*100));
+    return `<tr>
+      <td>${m}</td><td>${euro(spent)}</td><td>${euro(earned)}</td>
+      <td><span class="profit ${profit>=0?'pos':'neg'}">${euro(profit)}</span></td>
+      <td><div class="bar-wrap"><div class="bar ${profit<0?'neg':''}" style="width:${barWidth}%;"></div></div></td>
+    </tr>`;
+  }).join("");
+  const totRow = `<tr style="font-weight:700;border-top:2px solid var(--line);">
+    <td>Totale</td><td>${euro(totSpent)}</td><td>${euro(totEarned)}</td>
+    <td><span class="profit ${(totEarned-totSpent)>=0?'pos':'neg'}">${euro(totEarned-totSpent)}</span></td><td></td></tr>`;
+  tbody.innerHTML = rows + totRow;
+}
+
+// ---------- Esportazione ----------
+function downloadBlob(content, filename, mime){
+  const blob = new Blob([content], {type:mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+$("#export-json-btn").addEventListener("click", ()=>{
+  downloadBlob(JSON.stringify({cards, lots}, null, 2), "archivio_carte_backup.json", "application/json");
+});
+$("#export-excel-btn").addEventListener("click", ()=>{
+  const headers = ["Gioco","Nome Carta","Edizione","Set/Espansione","Rarità","Condizione","Quantità","Lotto","Note",
+    "Stato","Data Acquisto","Prezzo Acquisto Totale (€)","Piattaforma Acquisto",
+    "Data Vendita","Prezzo Vendita Totale (€)","Piattaforma Vendita","Profitto (€)"];
+  const rows = cards.map(c => {
+    const lot = c.lotId ? lots.find(l=>l.id===c.lotId) : null;
+    return [c.game, c.name, c.edition, c.set, c.rarity, c.condition, c.quantity, lot?lot.description:"", c.note,
+      c.status, c.pdate, c.pprice, c.pplatform, c.sdate, c.sprice, c.splatform,
+      profitOf(c) === null ? "" : profitOf(c)];
+  });
+  const wsCarte = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  const lotHeaders = ["ID Lotto","Descrizione","Data Acquisto","Prezzo Totale Lotto (€)"];
+  const lotRows = lots.map(l=>[l.id, l.description, l.date, l.totalCost]);
+  const wsLotti = XLSX.utils.aoa_to_sheet([lotHeaders, ...lotRows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsCarte, "Carte");
+  XLSX.utils.book_append_sheet(wb, wsLotti, "Lotti");
+  XLSX.writeFile(wb, "archivio_carte.xlsx");
+});
+
+// ---------- Importazione da Excel (riconosce anche export CardTrader) ----------
+function normalizeHeader(h){
+  return (h||"").toString().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\(.*?\)/g,"").toLowerCase().trim();
+}
+function excelDateToStr(v){
+  if(v === "" || v === null || v === undefined) return "";
+  if(v instanceof Date && !isNaN(v)){
+    const y=v.getFullYear(), m=String(v.getMonth()+1).padStart(2,"0"), d=String(v.getDate()).padStart(2,"0");
+    return `${y}-${m}-${d}`;
+  }
+  return v.toString().trim();
+}
+function toNumberOrEmpty(v){ if(v==="" || v===null || v===undefined) return ""; const n=Number(v); return isNaN(n)?"":n; }
+function normalizeStatus(raw){
+  const s=(raw||"").toString().toLowerCase();
+  if(s.includes("vend")) return "Venduto";
+  if(s.includes("rimoss")||s.includes("pers")||s.includes("rott")) return "Rimossa";
+  return "Disponibile";
+}
+function getVal(headerIndex,row,keys){
+  for(const k of keys){ const i=headerIndex[k]; if(i!==undefined && row[i]!==undefined && row[i]!=="") return row[i]; }
+  return "";
+}
+function mapStandardRow(headerIndex, row, gameName){
+  const name = getVal(headerIndex,row,["nome carta","nome"]).toString().trim();
+  if(!name) return null;
+  return {
+    id: uid(), game: gameName, name,
+    edition: getVal(headerIndex,row,["edizione"]).toString().trim(),
+    set: getVal(headerIndex,row,["set / espansione","set/espansione","set"]).toString().trim(),
+    rarity: getVal(headerIndex,row,["rarita"]).toString().trim(),
+    condition: getVal(headerIndex,row,["condizione"]).toString().trim(),
+    quantity: Number(getVal(headerIndex,row,["quantita"])) || 1,
+    note: getVal(headerIndex,row,["note"]).toString().trim(),
+    status: normalizeStatus(getVal(headerIndex,row,["stato"])),
+    pdate: excelDateToStr(getVal(headerIndex,row,["data acquisto"])),
+    pprice: toNumberOrEmpty(getVal(headerIndex,row,["prezzo acquisto totale","prezzo acquisto"])),
+    pplatform: getVal(headerIndex,row,["piattaforma acquisto"]).toString().trim(),
+    sdate: excelDateToStr(getVal(headerIndex,row,["data vendita"])),
+    sprice: toNumberOrEmpty(getVal(headerIndex,row,["prezzo vendita totale","prezzo vendita"])),
+    splatform: getVal(headerIndex,row,["piattaforma vendita"]).toString().trim(),
+    lotId: null,
+  };
+}
+function mapCardTraderRow(headerIndex, row){
+  const name = getVal(headerIndex,row,["item name"]).toString().trim();
+  if(!name) return null;
+  const qty = Number(getVal(headerIndex,row,["quantity"])) || 1;
+  const cents = Number(getVal(headerIndex,row,["price in eur cents"])) || 0;
+  const total = Math.round((cents/100)*qty*100)/100;
+  return {
+    id: uid(), game: getVal(headerIndex,row,["game"]).toString().trim() || "Altro", name,
+    edition: "", set: getVal(headerIndex,row,["set name"]).toString().trim(),
+    rarity: getVal(headerIndex,row,["rarity"]).toString().trim(),
+    condition: getVal(headerIndex,row,["condition"]).toString().trim(),
+    quantity: qty, note: "", status: "Disponibile",
+    pdate: todayStr(), pprice: total, pplatform: "Cardtrader",
+    sdate: "", sprice: "", splatform: "", lotId: null,
+  };
+}
+function parseWorkbook(workbook){
+  const SKIP_SHEETS = ["lotti","riepilogo","istruzioni"];
+  let out = [];
+  workbook.SheetNames.forEach(sheetName => {
+    if(SKIP_SHEETS.includes(sheetName.toLowerCase())) return;
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: true });
+    if(rows.length === 0) return;
+    // cerca intestazione: Nome Carta (formato standard) oppure Item Name (formato CardTrader)
+    let headerRowIdx = rows.findIndex(r => r.some(cell => ["nome carta","item name"].includes(normalizeHeader(cell))));
+    if(headerRowIdx === -1) return;
+    const headerRow = rows[headerRowIdx];
+    const headerIndex = {};
+    headerRow.forEach((cell, i) => { const key = normalizeHeader(cell); if(key) headerIndex[key] = i; });
+    const isCardTrader = headerIndex["item name"] !== undefined && headerIndex["price in eur cents"] !== undefined;
+    const dataRows = rows.slice(headerRowIdx + 1);
+    const gameName = workbook.SheetNames.length > 1 ? sheetName : "Altro";
+    dataRows.forEach(r => {
+      const card = isCardTrader ? mapCardTraderRow(headerIndex, r) : mapStandardRow(headerIndex, r, gameName);
+      if(card) out.push(card);
+    });
+  });
+  return out;
+}
+$("#import-btn").addEventListener("click", () => $("#import-file").click());
+$("#import-file").addEventListener("change", (e) => {
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try{
+      const data = new Uint8Array(ev.target.result);
+      const workbook = XLSX.read(data, { type: "array", cellDates: true });
+      pendingImport = parseWorkbook(workbook);
+      if(pendingImport.length === 0){ notify("Non ho trovato righe con un nome carta valido in questo file."); e.target.value=""; return; }
+      $("#import-summary").textContent = `Trovate ${pendingImport.length} carte nel file "${file.name}".`;
+      $("#import-modal").classList.remove("hidden");
+    }catch(err){ notify("Non sono riuscito a leggere questo file. Assicurati che sia un file Excel (.xlsx) valido."); }
+    e.target.value = "";
+  };
+  reader.readAsArrayBuffer(file);
+});
+$("#import-json-btn").addEventListener("click", () => $("#import-json-file").click());
+$("#import-json-file").addEventListener("change", (e) => {
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try{
+      const parsed = JSON.parse(ev.target.result);
+      const list = Array.isArray(parsed) ? parsed : parsed.cards;
+      if(!Array.isArray(list)) throw new Error("not array");
+      pendingImport = list.map(c => ({...c, id: uid()}));
+      if(!Array.isArray(parsed) && Array.isArray(parsed.lots)) pendingImport._lots = parsed.lots;
+      $("#import-summary").textContent = `Trovate ${pendingImport.length} carte nel file "${file.name}".`;
+      $("#import-modal").classList.remove("hidden");
+    }catch(err){ notify("Questo file JSON non sembra un backup valido dell'archivio."); }
+    e.target.value = "";
+  };
+  reader.readAsText(file);
+});
+$("#import-merge").addEventListener("click", () => {
+  if(pendingImport._lots) lots = lots.concat(pendingImport._lots.filter(l => !lots.some(x => x.id === l.id)));
+  populateLotSelect();
+  pendingImport.forEach(c => addOrMergeCard(c));
+  saveAll(); populateGameFilter(); closeImportModal(); render(); renderMonthly();
+});
+$("#import-replace").addEventListener("click", async () => {
+  if(await askConfirm("Questo cancellerà tutte le carte attualmente salvate e le sostituirà con quelle importate. Continuare?", "Sostituisci")){
+    cards = []; if(pendingImport._lots) lots = pendingImport._lots.slice(); populateLotSelect(); pendingImport.forEach(c => addOrMergeCard(c));
+    saveAll(); populateGameFilter(); closeImportModal(); render(); renderMonthly();
+  }
+});
+$("#import-cancel").addEventListener("click", () => { pendingImport = []; closeImportModal(); });
+function closeImportModal(){ $("#import-modal").classList.add("hidden"); }
+
+toggleSaleFields(); toggleLotFields();
+$("#clear-all-btn").addEventListener("click", async ()=>{
+  if(cards.length===0 && lots.length===0){ notify("L'archivio è già vuoto."); return; }
+  const ok = await askConfirm(`Eliminare TUTTE le ${cards.length} carte e i ${lots.length} lotti dall'archivio? Potrai comunque annullare con "Annulla ultima modifica" finché non chiudi la pagina.`, "Elimina tutto");
+  if(!ok) return;
+  cards = []; lots = [];
+  saveAll(); resetForm(); closeFormPanel();
+  populateGameFilter(); populateLotSelect(); render(); renderLots(); renderMonthly();
+  notify("Archivio svuotato.");
+});
+$("#undo-btn").addEventListener("click", undoLast);
+
+// ======================= SINCRONIZZAZIONE (Supabase) =======================
+// Facoltativo: scrivi qui indirizzo e chiave pubblica (anon) del tuo progetto Supabase,
+// così non devi digitarli su ogni dispositivo. La chiave anon è pubblica per progetto:
+// i dati sono protetti dall'accesso con email e password.
+const SUPABASE_URL = "";
+const SUPABASE_KEY = "";
+const SB_CFG_KEY = "archivio-sb-config", SB_SESSION_KEY = "archivio-sb-session", SB_META_KEY = "archivio-sync-meta";
+let sbCfg = {url: SUPABASE_URL, key: SUPABASE_KEY};
+let session = null;
+let syncMeta = {version: null, dirty: false};
+let syncing = false, syncAgain = false, syncTimer = null, changeCounter = 0;
+
+function jget(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
+function loadSyncState(){
+  if(!sbCfg.url || !sbCfg.key){ const c = jget(SB_CFG_KEY); if(c) sbCfg = c; }
+  session = jget(SB_SESSION_KEY);
+  syncMeta = jget(SB_META_KEY) || {version:null, dirty:false};
+}
+function saveSyncMeta(){ try{ localStorage.setItem(SB_META_KEY, JSON.stringify(syncMeta)); }catch(e){} }
+const sbConfigured = () => !!(sbCfg.url && sbCfg.key);
+// Tiene solo l'indirizzo base (https://xxxx.supabase.co), anche se è stato incollato con pezzi in più (/rest/v1/, /auth/v1...)
+function cleanSbUrl(u){
+  u = (u || "").trim();
+  if(!u) return "";
+  if(!/^https?:\/\//i.test(u)) u = "https://" + u;
+  try{ return new URL(u).origin; }catch(e){ return u.replace(/\/+$/,""); }
+}
+const sbUrl = () => cleanSbUrl(sbCfg.url);
+
+function setSyncStatus(text, kind){
+  const chip = $("#sync-chip"); if(!chip) return;
+  chip.textContent = text; chip.className = "sync-chip" + (kind ? " "+kind : "");
+}
+function refreshSyncChip(){
+  if(session) setSyncStatus(syncMeta.dirty ? "☁ Modifiche in attesa" : "☁ Sincronizzato", syncMeta.dirty ? "busy" : "ok");
+  else setSyncStatus("☁ Accedi per sincronizzare", "");
+}
+function markDirty(){
+  if(!session) return;
+  syncMeta.dirty = true; changeCounter++; saveSyncMeta();
+  setSyncStatus("☁ Modifiche in attesa", "busy");
+  scheduleSync(800);
+}
+function scheduleSync(ms){
+  if(!session) return;
+  clearTimeout(syncTimer); syncTimer = setTimeout(syncNow, ms === undefined ? 800 : ms);
+}
+
+function applySession(j){
+  session = {
+    access_token: j.access_token, refresh_token: j.refresh_token,
+    expires_at: j.expires_at || (Date.now()/1000 + (j.expires_in || 3600)),
+    user_id: (j.user && j.user.id) || (session && session.user_id),
+    email: (j.user && j.user.email) || (session && session.email),
+  };
+  try{ localStorage.setItem(SB_SESSION_KEY, JSON.stringify(session)); }catch(e){}
+}
+async function authRequest(kind, email, password){
+  const path = kind === "login" ? "/auth/v1/token?grant_type=password" : "/auth/v1/signup";
+  const r = await fetch(sbUrl()+path, {method:"POST", headers:{apikey: sbCfg.key, "Content-Type":"application/json"}, body: JSON.stringify({email, password})});
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.error_description || j.msg || j.message || "Accesso non riuscito");
+  if(!j.access_token) return "confirm";
+  applySession(j); return "ok";
+}
+async function ensureSession(){
+  if(!session) return false;
+  if(session.expires_at - Date.now()/1000 > 60) return true;
+  const r = await fetch(sbUrl()+"/auth/v1/token?grant_type=refresh_token", {method:"POST", headers:{apikey: sbCfg.key, "Content-Type":"application/json"}, body: JSON.stringify({refresh_token: session.refresh_token})});
+  if(!r.ok){
+    if([400,401,403].includes(r.status)){ session = null; try{ localStorage.removeItem(SB_SESSION_KEY); }catch(e){} refreshSyncChip(); return false; }
+    throw new Error("refresh");
+  }
+  applySession(await r.json()); return true;
+}
+async function restFetch(path, opts){
+  const r = await fetch(sbUrl()+"/rest/v1/"+path, Object.assign({}, opts, {headers: {apikey: sbCfg.key, Authorization: "Bearer "+session.access_token, "Content-Type":"application/json", Prefer:"return=representation"}}));
+  if(!r.ok) throw new Error("REST "+r.status+" "+(await r.text()));
+  return r.status === 204 ? null : r.json();
+}
+
+function adoptRemote(remote){
+  const d = remote.data || {};
+  cards = Array.isArray(d.cards) ? d.cards : [];
+  lots = Array.isArray(d.lots) ? d.lots : [];
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+    localStorage.setItem(LOTS_KEY, JSON.stringify(lots));
+  }catch(e){}
+  lastSnapshot = JSON.stringify({cards, lots});
+  undoStack.length = 0;
+  syncMeta = {version: remote.version, dirty: false};
+  resetForm(); closeFormPanel();
+  populateGameFilter(); populateLotSelect(); render(); renderLots(); renderMonthly(); updateUndoBtn();
+}
+async function pushLocal(baseVersion){
+  const startCounter = changeCounter;
+  const rows = await restFetch(`archivio?user_id=eq.${session.user_id}&version=eq.${baseVersion}`, {
+    method: "PATCH",
+    body: JSON.stringify({data: {cards, lots}, version: baseVersion + 1, updated_at: new Date().toISOString()}),
+  });
+  if(!rows || rows.length === 0) return false;   // qualcun altro ha scritto nel frattempo
+  syncMeta = {version: baseVersion + 1, dirty: changeCounter !== startCounter};
+  return true;
+}
+
+async function syncNow(){
+  if(!sbConfigured() || !session) return;
+  if(syncing){ syncAgain = true; return; }
+  syncing = true; setSyncStatus("☁ Sincronizzazione…", "busy");
+  try{
+    if(!(await ensureSession())) return;
+    const rows = await restFetch(`archivio?select=data,version&user_id=eq.${session.user_id}`);
+    const remote = rows && rows[0];
+    const nRemote = remote && remote.data && Array.isArray(remote.data.cards) ? remote.data.cards.length : 0;
+    if(!remote){
+      const startCounter = changeCounter;
+      await restFetch("archivio", {method:"POST", body: JSON.stringify({user_id: session.user_id, data: {cards, lots}, version: 1})});
+      syncMeta = {version: 1, dirty: changeCounter !== startCounter};
+    }else if(syncMeta.version === null){
+      if(cards.length === 0 && lots.length === 0) adoptRemote(remote);
+      else if(JSON.stringify({cards, lots}) === JSON.stringify(remote.data)){ syncMeta = {version: remote.version, dirty: false}; }
+      else{
+        const useRemote = await askConfirm(`Online c'è già un archivio con ${nRemote} carte, mentre questo dispositivo ne ha ${cards.length}. Quale vuoi tenere?`, "Usa quello online", "Sostituisci online con questo");
+        if(useRemote) adoptRemote(remote);
+        else if(!(await pushLocal(remote.version))) syncAgain = true;
+      }
+    }else if(remote.version === syncMeta.version){
+      if(syncMeta.dirty && !(await pushLocal(remote.version))) syncAgain = true;
+    }else{
+      if(!syncMeta.dirty) adoptRemote(remote);
+      else{
+        const useRemote = await askConfirm("L'archivio è stato modificato anche da un altro dispositivo. Vuoi usare la versione online (perdendo le modifiche fatte qui) oppure tenere questa?", "Usa quella online", "Tieni questa");
+        if(useRemote) adoptRemote(remote);
+        else if(!(await pushLocal(remote.version))) syncAgain = true;
+      }
+    }
+    saveSyncMeta(); refreshSyncChip();
+  }catch(e){
+    console.error(e);
+    setSyncStatus(navigator.onLine ? "☁ Errore di sincronizzazione" : "☁ Offline: modifiche in attesa", "warn");
+  }finally{
+    syncing = false;
+    if(syncAgain){ syncAgain = false; scheduleSync(300); }
+  }
+}
+
+// ---- modale account ----
+function openAccount(){
+  const logged = !!session;
+  $("#acct-logged-out").classList.toggle("hidden", logged);
+  $("#acct-logged-in").classList.toggle("hidden", !logged);
+  $("#acct-config").classList.toggle("hidden", !!(SUPABASE_URL && SUPABASE_KEY));
+  if(logged) $("#acct-info").textContent = `Collegato come ${session.email || "—"}. ${syncMeta.dirty ? "Ci sono modifiche in attesa di essere inviate." : "Tutto sincronizzato."}`;
+  $("#sb-msg").textContent = "";
+  if(sbCfg.url) $("#sb-url").value = sbCfg.url;
+  if(sbCfg.key) $("#sb-key").value = sbCfg.key;
+  $("#account-modal").classList.remove("hidden");
+}
+async function doAuth(kind){
+  const url = ($("#sb-url").value || sbCfg.url || "").trim(), key = ($("#sb-key").value || sbCfg.key || "").trim();
+  const email = $("#sb-email").value.trim(), pass = $("#sb-pass").value;
+  if(!url || !key){ $("#sb-msg").textContent = "Inserisci indirizzo e chiave del progetto."; return; }
+  if(!email || pass.length < 6){ $("#sb-msg").textContent = "Inserisci email e una password di almeno 6 caratteri."; return; }
+  sbCfg = {url: cleanSbUrl(url), key};
+  $("#sb-url").value = sbCfg.url;
+  if(!(SUPABASE_URL && SUPABASE_KEY)){ try{ localStorage.setItem(SB_CFG_KEY, JSON.stringify(sbCfg)); }catch(e){} }
+  $("#sb-msg").textContent = "Attendi…";
+  try{
+    const res = await authRequest(kind, email, pass);
+    if(res === "confirm"){ $("#sb-msg").textContent = "Account creato: conferma l'email che ti è arrivata, poi premi Accedi."; return; }
+    syncMeta = {version: null, dirty: false}; saveSyncMeta();
+    $("#account-modal").classList.add("hidden"); $("#sb-pass").value = "";
+    refreshSyncChip(); notify("Accesso eseguito."); scheduleSync(0);
+  }catch(e){ $("#sb-msg").textContent = e.message; }
+}
+$("#sync-chip").addEventListener("click", openAccount);
+$("#sb-close").addEventListener("click", ()=> $("#account-modal").classList.add("hidden"));
+$("#sb-login").addEventListener("click", ()=> doAuth("login"));
+$("#sb-signup").addEventListener("click", ()=> doAuth("signup"));
+$("#sb-sync-now").addEventListener("click", ()=>{ $("#account-modal").classList.add("hidden"); scheduleSync(0); });
+$("#sb-logout").addEventListener("click", ()=>{
+  session = null; syncMeta = {version: null, dirty: false};
+  try{ localStorage.removeItem(SB_SESSION_KEY); }catch(e){}
+  saveSyncMeta(); refreshSyncChip();
+  $("#account-modal").classList.add("hidden"); notify("Disconnesso: l'archivio resta su questo dispositivo.");
+});
+window.addEventListener("online", ()=> scheduleSync(300));
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState === "visible") scheduleSync(300); });
+setInterval(()=>{ if(document.visibilityState === "visible") scheduleSync(0); }, 60000);
+if("serviceWorker" in navigator && location.protocol.indexOf("http") === 0){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
+
+toggleSaleFields(); toggleLotFields();
+loadSyncState();
+loadAll();
+updateUndoBtn();
+refreshSyncChip();
+scheduleSync(500);
+</script>
+</body>
+</html>
