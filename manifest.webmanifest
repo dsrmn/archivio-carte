@@ -1,0 +1,11 @@
+{
+  "name": "Archivio Carte",
+  "short_name": "Carte",
+  "description": "Archivio di carte collezionabili: copie, acquisti, vendite e lotti",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0c231b",
+  "theme_color": "#153a2c",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
