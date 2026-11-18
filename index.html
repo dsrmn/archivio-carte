@@ -1,0 +1,1711 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#13294b">
+<title>CardArchive</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --navy:#13294b;--navy2:#1c3a66;--navy3:#26497d;--blue:#1e6fd9;--blue-d:#1559b3;
+  --bg:#eef1f5;--card:#fff;--line:#dde2ea;--line2:#eef1f6;--text:#1f2733;--muted:#6b7686;
+  --green:#23905a;--red:#cf3e3e;--orange:#f39200;--yellow:#f6c343;
+  --r:8px;--sh:0 1px 2px rgba(16,30,54,.06),0 2px 8px rgba(16,30,54,.05);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+button,input,select,textarea{font:inherit;color:inherit}
+h1{font-size:22px;margin:0 0 4px}
+h2{font-size:17px;margin:0 0 12px}
+h3{font-size:15px;margin:0}
+.muted{color:var(--muted)}
+.small{font-size:12.5px}
+.right{text-align:right}
+.nowrap{white-space:nowrap}
+.pos{color:var(--green);font-weight:600}
+.neg{color:var(--red);font-weight:600}
+
+/* top bar */
+.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+.top-in{max-width:1240px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:10px 16px}
+.logo{display:flex;align-items:center;gap:9px;color:#fff;font-weight:800;font-size:19px;letter-spacing:-.3px;white-space:nowrap}
+.logo:hover{text-decoration:none}
+.logo i{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--orange),#ffb84d);font-style:normal;color:var(--navy);font-size:15px}
+.logo span{color:#9fc1ff}
+.search{flex:1;max-width:560px;position:relative}
+.search input{width:100%;border:0;border-radius:6px;padding:9px 12px 9px 34px;background:#fff;color:var(--text);outline:none}
+.search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);opacity:.5}
+.top-actions{margin-left:auto;display:flex;gap:6px;align-items:center}
+.tbtn{background:var(--navy2);border:1px solid var(--navy3);color:#fff;border-radius:6px;padding:7px 10px;cursor:pointer;white-space:nowrap}
+.tbtn:hover{background:var(--navy3)}
+.tbtn:disabled{opacity:.4;cursor:default}
+.subnav{background:var(--navy2)}
+.subnav-in{max-width:1240px;margin:0 auto;display:flex;gap:2px;padding:0 10px;overflow-x:auto;scrollbar-width:none}
+.subnav a{color:#d6e2f5;padding:10px 12px;white-space:nowrap;border-bottom:3px solid transparent;font-weight:500}
+.subnav a:hover{color:#fff;text-decoration:none;background:rgba(255,255,255,.05)}
+.subnav a.on{color:#fff;border-bottom-color:var(--orange)}
+.subnav .sep{width:1px;background:rgba(255,255,255,.15);margin:8px 6px}
+#busy{position:fixed;top:0;left:0;height:3px;width:0;background:var(--orange);z-index:99;transition:width .3s}
+#busy.on{width:80%;transition:width 4s cubic-bezier(.1,.6,.2,1)}
+
+/* layout */
+main{max-width:1240px;margin:0 auto;padding:16px}
+.crumbs{font-size:13px;color:var(--muted);margin:2px 0 12px}
+.crumbs a{color:var(--muted)}
+.crumbs b{color:var(--text);font-weight:600}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:16px;margin-bottom:16px}
+.panel.flush{padding:0;overflow:hidden}
+.panel-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line);background:#f8f9fb}
+.panel-h h2{margin:0}
+.grow{flex:1}
+.row{display:flex;gap:16px;flex-wrap:wrap}
+.row>*{min-width:0}
+.pagehead{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;box-shadow:var(--sh)}
+.stat .l{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.stat .v{font-size:22px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+.stat .s{font-size:12px;color:var(--muted)}
+
+/* games tiles */
+.games{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.game{display:flex;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;box-shadow:var(--sh);color:var(--text)}
+.game:hover{border-color:var(--blue);text-decoration:none}
+.gicon{width:44px;height:44px;border-radius:10px;display:grid;place-items:center;font-weight:800;color:#fff;flex:none;font-size:15px}
+.g-ygo{background:linear-gradient(135deg,#7a3cc2,#c0392b)}
+.g-pkm{background:linear-gradient(135deg,#f0b90b,#e5532d)}
+.g-op{background:linear-gradient(135deg,#d62828,#264aa8)}
+.g-x{background:linear-gradient(135deg,#4b6584,#2d3e50)}
+
+/* buttons/forms */
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 12px;cursor:pointer;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:#b9c3d3;background:#f8fafc;text-decoration:none}
+.btn.pri{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.pri:hover{background:var(--blue-d)}
+.btn.ok{background:var(--green);border-color:var(--green);color:#fff}
+.btn.dan{color:var(--red);border-color:#f0c9c9}
+.btn.dan:hover{background:#fdf2f2}
+.btn.dan.fill{background:var(--red);color:#fff;border-color:var(--red)}
+.btn.sm{padding:4px 8px;font-size:12.5px}
+.btn:disabled{opacity:.5;cursor:default}
+.inp,select.inp,textarea.inp{width:100%;border:1px solid #cdd5e1;border-radius:6px;padding:7px 9px;background:#fff;outline:none}
+.inp:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(30,111,217,.15)}
+label.f{display:block;font-size:12.5px;color:var(--muted);font-weight:600;margin-bottom:4px}
+.fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.fg .full{grid-column:1/-1}
+.seg{display:inline-flex;border:1px solid #cdd5e1;border-radius:6px;overflow:hidden}
+.seg button{border:0;background:#fff;padding:6px 12px;cursor:pointer}
+.seg button.on{background:var(--navy2);color:#fff}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filters .inp{width:auto}
+fieldset{border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:0}
+legend{font-size:12.5px;color:var(--muted);font-weight:600;padding:0 4px}
+
+/* tables */
+.tw{overflow-x:auto}
+table.t{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.t th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);font-weight:600;padding:9px 10px;border-bottom:1px solid var(--line);background:#f8f9fb;white-space:nowrap}
+.t td{padding:8px 10px;border-bottom:1px solid var(--line2);vertical-align:middle}
+.t tbody tr:nth-child(even){background:#fbfcfd}
+.t tbody tr:hover{background:#f1f6fe}
+.t th.sortable{cursor:pointer}
+.t th.sortable:hover{color:var(--text)}
+.t tfoot td{font-weight:700;background:#f8f9fb;border-top:1px solid var(--line)}
+.t .acts{white-space:nowrap;text-align:right}
+.t a.cname{font-weight:600}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.pager{display:flex;gap:6px;justify-content:flex-end;align-items:center;padding:10px 16px}
+
+/* badges */
+.b{display:inline-block;border-radius:4px;padding:1px 6px;font-size:11.5px;font-weight:700;line-height:18px;white-space:nowrap}
+.c-MT{background:#17a2b8;color:#fff}.c-NM{background:#2e9b57;color:#fff}.c-EX{background:#8dbb3c;color:#fff}
+.c-GD{background:#d6c22b;color:#2b2b00}.c-LP{background:#f29a2e;color:#fff}.c-PL{background:#e8664a;color:#fff}.c-PO{background:#c0392b;color:#fff}
+.c-x{background:#e5e9f0;color:#3c4656}
+.rar{background:#eef2fb;color:#2c4a86;font-weight:600}
+.st-d{background:#e3f4ea;color:#1d7a4a}.st-v{background:#eceff4;color:#5b6474}
+.lotb{background:#fff3df;color:#9a5b00}
+.lang{background:#f1f3f7;color:#3c4656;font-weight:600}
+
+/* card page */
+.cardtop{display:grid;grid-template-columns:220px 1fr;gap:16px}
+.cimg{width:220px;aspect-ratio:63/88;border-radius:10px;background:linear-gradient(160deg,#2a4777,#13294b);display:grid;place-items:center;color:#fff;overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,.2);position:relative}
+.cimg img{width:100%;height:100%;object-fit:cover}
+.cimg .ph{text-align:center;padding:16px}
+.cimg .ph b{display:block;font-size:17px;margin-top:10px}
+.cimg .ph small{opacity:.7}
+.info{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;font-size:13.5px}
+.info dt{color:var(--muted)}
+.info dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums}
+.chart svg{width:100%;height:auto;display:block}
+.legend{display:flex;gap:14px;font-size:12.5px;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+
+/* immagini */
+.thumb{position:relative;display:inline-block;width:30px;height:42px;border-radius:3px;overflow:visible;vertical-align:middle;flex:none}
+.thumb>img:first-child{width:30px;height:42px;object-fit:cover;border-radius:3px;display:block;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.thumb>i{display:grid;place-items:center;width:30px;height:42px;border-radius:3px;color:#fff;font-style:normal;font-size:8.5px;font-weight:800;opacity:.55}
+.thumb .big{display:none;position:absolute;left:38px;top:50%;transform:translateY(-50%);width:190px;height:auto;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.35);z-index:30;pointer-events:none}
+@media (hover:hover){.thumb:hover .big{display:block}}
+td.tc{width:44px;padding-right:0}
+.cimg{cursor:pointer}
+.cimg .imgbtn{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);background:rgba(10,20,40,.75);color:#fff;border:0;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;white-space:nowrap;opacity:0;transition:opacity .15s}
+.cimg:hover .imgbtn,.cimg:focus-within .imgbtn{opacity:1}
+@media (hover:none){.cimg .imgbtn{opacity:1}}
+.imgprev{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.imgprev img{width:110px;border-radius:6px;cursor:pointer;border:3px solid transparent;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+.imgprev img:hover{border-color:var(--blue)}
+
+/* modal */
+.mback{position:fixed;inset:0;background:rgba(10,20,40,.45);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:5vh 12px;overflow-y:auto}
+.mbox{background:#fff;border-radius:10px;width:100%;max-width:560px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.mbox.wide{max-width:780px}
+.mhead{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)}
+.mhead h3{flex:1;font-size:16px}
+.x{border:0;background:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1}
+.mbody{padding:16px}
+.mfoot{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;padding-top:14px;margin-top:14px;border-top:1px solid var(--line)}
+
+/* autocomplete */
+.acw{position:relative}
+.ac{position:absolute;left:0;right:0;top:100%;margin-top:3px;background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.14);z-index:60;max-height:300px;overflow-y:auto;color:var(--text)}
+.ac:empty{display:none}
+.ac div.it{padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--line2)}
+.ac div.it:last-child{border-bottom:0}
+.ac div.it.on,.ac div.it:hover{background:#eef4ff}
+.ac div.it small{display:block;color:var(--muted);font-size:11.5px}
+.ac .hd{padding:5px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);background:#f8f9fb}
+
+/* toast */
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:90;display:flex;flex-direction:column;gap:8px;align-items:center}
+.tst{background:#1f2733;color:#fff;padding:10px 14px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.25);display:flex;gap:12px;align-items:center;max-width:92vw}
+.tst.err{background:var(--red)}
+.tst button{background:none;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:5px;padding:3px 8px;cursor:pointer}
+
+/* auth */
+.auth{max-width:440px;margin:7vh auto;padding:0 16px}
+.auth .panel{padding:24px}
+.auth .logo{color:var(--navy);justify-content:center;font-size:24px;margin-bottom:18px}
+.auth .logo span{color:var(--blue)}
+.note{background:#f4f7fc;border:1px solid #dde6f4;border-radius:6px;padding:10px 12px;font-size:13px;color:#3b4b63}
+.dz{border:2px dashed #c4cfdf;border-radius:8px;padding:22px;text-align:center;background:#fafbfd;cursor:pointer}
+.dz:hover,.dz.on{border-color:var(--blue);background:#f1f6fe}
+
+@media (max-width:760px){
+  .top-in{flex-wrap:wrap;gap:10px}
+  .search{order:3;max-width:none;flex-basis:100%}
+  .tbtn .lbl{display:none}
+  main{padding:12px}
+  .cardtop{grid-template-columns:1fr}
+  .cimg{width:160px;margin:0 auto}
+  .hide-m{display:none}
+  .t td,.t th{padding:7px 8px}
+}
+</style>
+</head>
+<body>
+<div id="busy"></div>
+<div id="root"></div>
+<div id="modal"></div>
+<div id="toast"></div>
+
+<script>
+/* =====================================================================
+   CONFIGURAZIONE OPZIONALE
+   Se incolli qui URL e chiave "anon public" del tuo progetto Supabase,
+   l'app non te li chiederà su nessun dispositivo (PC e telefono).
+   ===================================================================== */
+const SUPABASE_URL = '';
+const SUPABASE_ANON_KEY = '';
+
+/* ===================== utilità ===================== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const EUR = new Intl.NumberFormat('it-IT', {style:'currency', currency:'EUR'});
+const eur = n => (n == null || isNaN(n)) ? '—' : EUR.format(n);
+const signEur = n => (n == null || isNaN(n)) ? '—' : `<span class="${n >= 0 ? 'pos' : 'neg'}">${n > 0 ? '+' : ''}${EUR.format(n)}</span>`;
+const pad = n => String(n).padStart(2, '0');
+const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const today = () => isoLocal(new Date());
+const fdate = d => d ? d.slice(0,10).split('-').reverse().join('/') : '—';
+const MESI = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+const fmonth = m => { const [y, mm] = m.split('-'); return `${MESI[+mm-1]} ${y}`; };
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random()*16|0; return (c === 'x' ? r : (r&3|8)).toString(16); }));
+const clean = s => String(s ?? '').replace(/\s+/g, ' ').trim();
+const norm = s => clean(s).toLowerCase();
+const fold = s => norm(s).normalize('NFD').replace(/[̀-ͯ]/g, '');
+const keyOf = c => [c.game, c.expansion, c.name, c.rarity].map(norm).join('|');
+const sum = (a, f) => a.reduce((t, x) => t + (f(x) || 0), 0);
+const round2 = n => Math.round(n * 100) / 100;
+const enc = s => encodeURIComponent(s === '' ? '~' : s);
+const dec = s => { const v = decodeURIComponent(s); return v === '~' ? '' : v; };
+function num(v){
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  let s = String(v).replace(/[€\s]/g, '').replace(/eur/i, '');
+  if (/,\d{1,2}$/.test(s)) s = s.replace(/\./g, '').replace(',', '.'); else s = s.replace(/,/g, '');
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+const GAMES = ['Yu-Gi-Oh!', 'Pokémon', 'One Piece'];
+function gameName(v){
+  const s = fold(v);
+  if (!s) return '';
+  if (/yu.?gi/.test(s)) return 'Yu-Gi-Oh!';
+  if (/pok/.test(s)) return 'Pokémon';
+  if (/one.?piece/.test(s)) return 'One Piece';
+  if (/magic|mtg/.test(s)) return 'Magic';
+  if (/lorcana/.test(s)) return 'Lorcana';
+  return clean(v);
+}
+const gameCls = g => g === 'Yu-Gi-Oh!' ? 'g-ygo' : g === 'Pokémon' ? 'g-pkm' : g === 'One Piece' ? 'g-op' : 'g-x';
+const gameAbbr = g => g === 'Yu-Gi-Oh!' ? 'YGO' : g === 'Pokémon' ? 'PKM' : g === 'One Piece' ? 'OP' : (g || '?').slice(0,3).toUpperCase();
+
+const CONDS = ['MT','NM','EX','GD','LP','PL','PO'];
+const COND_LBL = {MT:'Mint', NM:'Near Mint', EX:'Excellent', GD:'Good', LP:'Light Played', PL:'Played', PO:'Poor'};
+function normCond(v){
+  const s = fold(v); if (!s) return 'NM';
+  const u = s.toUpperCase(); if (CONDS.includes(u)) return u;
+  const map = [[/^near ?mint|^nm/, 'NM'], [/^mint|^perfett/, 'MT'], [/excellent|slightly|ottim/, 'EX'], [/^good|moderately|buon/, 'GD'],
+               [/light|^played|^lp/, 'LP'], [/heavily|^pl/, 'PL'], [/poor|damag|rovinat/, 'PO']];
+  for (const [re, c] of map) if (re.test(s)) return c;
+  return clean(v).toUpperCase().slice(0, 12);
+}
+const condB = c => c ? `<span class="b ${CONDS.includes(c) ? 'c-'+c : 'c-x'}" title="${esc(COND_LBL[c] || c)}">${esc(c)}</span>` : '';
+const LANGS = ['IT','EN','DE','FR','ES','PT','JP','KR','CN'];
+const RARITIES = {
+  'Yu-Gi-Oh!': ['Common','Rare','Super Rare','Ultra Rare','Secret Rare','Ultimate Rare','Ghost Rare','Starlight Rare','Collector\'s Rare','Quarter Century Secret Rare','Prismatic Secret Rare','Platinum Secret Rare','Gold Rare','Premium Gold Rare','Short Print'],
+  'Pokémon': ['Common','Uncommon','Rare','Rare Holo','Double Rare','Ultra Rare','Illustration Rare','Special Illustration Rare','Hyper Rare','ACE SPEC Rare','Shiny Rare','Promo'],
+  'One Piece': ['C','UC','R','SR','SEC','L','SP','TR','P']
+};
+const EDITIONS = ['1st Edition','Unlimited','Limited Edition','Reprint'];
+const PLATFORMS = ['Cardmarket','CardTrader','eBay','Vinted','Di persona','Altro'];
+
+/* ===================== stato & backend ===================== */
+const TABLES = ['cards','lots','copies'];
+const S = {cards:new Map(), lots:new Map(), copies:new Map(), user:null, mode:null};
+let sb = null;
+const CFG_KEY = 'cardarchive.cfg';
+function getCfg(){
+  if (SUPABASE_URL && SUPABASE_ANON_KEY) return {mode:'supabase', url:fixUrl(SUPABASE_URL), key:SUPABASE_ANON_KEY, fixed:true};
+  try { const c = JSON.parse(localStorage.getItem(CFG_KEY) || 'null'); if (c && c.url) c.url = fixUrl(c.url); return c; } catch { return null; }
+}
+function fixUrl(u){
+  u = clean(u).replace(/^["']|["']$/g, '');
+  if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  try {
+    const x = new URL(u);
+    const m = x.pathname.match(/\/project\/([a-z0-9]{10,})/i);
+    if (/supabase\.com$/i.test(x.hostname) && m) return `https://${m[1]}.supabase.co`;
+    return 'https://' + x.hostname;
+  } catch { return u; }
+}
+const setCfg = c => c ? localStorage.setItem(CFG_KEY, JSON.stringify(c)) : localStorage.removeItem(CFG_KEY);
+
+const LS = {
+  get: t => { try { return JSON.parse(localStorage.getItem('cardarchive.local.'+t) || '[]'); } catch { return []; } },
+  put: (t, rows) => localStorage.setItem('cardarchive.local.'+t, JSON.stringify(rows))
+};
+const chunk = (a, n) => { const r = []; for (let i = 0; i < a.length; i += n) r.push(a.slice(i, i+n)); return r; };
+const strip = r => { const o = {...r}; delete o.user_id; return o; };
+
+const DB = {
+  async fetchAll(t){
+    if (S.mode === 'local') return LS.get(t);
+    const all = [];
+    for (let from = 0; ; from += 1000){
+      const {data, error} = await sb.from(t).select('*').order('created_at').range(from, from + 999);
+      if (error) throw error;
+      all.push(...data);
+      if (data.length < 1000) break;
+    }
+    return all;
+  },
+  async insert(t, rows){
+    if (S.mode === 'local'){ LS.put(t, LS.get(t).concat(rows)); return; }
+    for (const c of chunk(rows, 500)){ const {error} = await sb.from(t).insert(c.map(strip)); if (error) throw error; }
+  },
+  async upsert(t, rows){
+    if (S.mode === 'local'){ const m = new Map(LS.get(t).map(r => [r.id, r])); rows.forEach(r => m.set(r.id, r)); LS.put(t, [...m.values()]); return; }
+    for (const c of chunk(rows, 500)){ const {error} = await sb.from(t).upsert(c); if (error) throw error; }
+  },
+  async update(t, ids, patch){
+    if (S.mode === 'local'){ const set = new Set(ids); LS.put(t, LS.get(t).map(r => set.has(r.id) ? {...r, ...patch} : r)); return; }
+    for (const c of chunk(ids, 200)){ const {error} = await sb.from(t).update(patch).in('id', c); if (error) throw error; }
+  },
+  async remove(t, ids){
+    if (S.mode === 'local'){ const set = new Set(ids); LS.put(t, LS.get(t).filter(r => !set.has(r.id))); return; }
+    for (const c of chunk(ids, 200)){ const {error} = await sb.from(t).delete().in('id', c); if (error) throw error; }
+  }
+};
+
+function normRow(t, r){
+  const o = {...r};
+  if (t === 'copies'){ o.qty = Number(o.qty) || 1; o.buy_price = o.buy_price == null ? null : Number(o.buy_price); o.sell_price = o.sell_price == null ? null : Number(o.sell_price); }
+  if (t === 'lots') o.total_price = Number(o.total_price) || 0;
+  return o;
+}
+async function loadAll(){
+  busy(true);
+  try {
+    for (const t of TABLES){ const rows = await DB.fetchAll(t); S[t] = new Map(rows.map(r => [r.id, normRow(t, r)])); }
+  } finally { busy(false); }
+}
+
+/* ===== transazioni con annullamento ===== */
+const undoStack = [];
+async function commit(label, fn){
+  const inv = [];
+  const tx = {
+    async insert(t, rows){
+      rows = [].concat(rows); if (!rows.length) return;
+      rows = rows.map(r => ({created_at: new Date().toISOString(), ...r}));
+      await DB.insert(t, rows); rows.forEach(r => S[t].set(r.id, normRow(t, r)));
+      inv.push({op:'remove', t, ids: rows.map(r => r.id)});
+    },
+    async update(t, ids, patch){
+      ids = [].concat(ids).filter(id => S[t].has(id)); if (!ids.length) return;
+      const olds = ids.map(id => ({...S[t].get(id)}));
+      await DB.update(t, ids, patch); ids.forEach(id => S[t].set(id, normRow(t, {...S[t].get(id), ...patch})));
+      inv.push({op:'upsert', t, rows: olds});
+    },
+    async remove(t, ids){
+      ids = [].concat(ids).filter(id => S[t].has(id)); if (!ids.length) return;
+      const olds = ids.map(id => ({...S[t].get(id)}));
+      await DB.remove(t, ids); ids.forEach(id => S[t].delete(id));
+      inv.push({op:'upsert', t, rows: olds});
+    }
+  };
+  busy(true);
+  try {
+    await fn(tx);
+  } catch (e){
+    console.error(e);
+    try { await applyInverse(inv.reverse()); } catch (e2){ console.error(e2); }
+    busy(false); toast('Errore: ' + (e.message || e), 'err'); render(); return false;
+  }
+  busy(false);
+  if (inv.length){ undoStack.push({label, inv: inv.reverse()}); if (undoStack.length > 40) undoStack.shift(); }
+  render();
+  toast(label, '', inv.length ? 'Annulla' : null);
+  return true;
+}
+async function applyInverse(ops){
+  for (const o of ops){
+    if (o.op === 'remove'){ await DB.remove(o.t, o.ids); o.ids.forEach(id => S[o.t].delete(id)); }
+    else { await DB.upsert(o.t, o.rows); o.rows.forEach(r => S[o.t].set(r.id, normRow(o.t, r))); }
+  }
+}
+async function undo(){
+  const u = undoStack.pop(); if (!u) return;
+  busy(true);
+  try { await applyInverse(u.inv); toast('Annullato: ' + u.label); }
+  catch (e){ toast('Impossibile annullare: ' + e.message, 'err'); }
+  busy(false); render();
+}
+
+/* ===================== indici derivati ===================== */
+let IX = null;
+function index(){
+  const byCard = new Map(), byLot = new Map();
+  for (const c of S.copies.values()){
+    (byCard.get(c.card_id) || byCard.set(c.card_id, []).get(c.card_id)).push(c);
+    if (c.lot_id) (byLot.get(c.lot_id) || byLot.set(c.lot_id, []).get(c.lot_id)).push(c);
+  }
+  const byKey = new Map(); for (const c of S.cards.values()) byKey.set(keyOf(c), c);
+  const games = [...new Set([...GAMES, ...[...S.cards.values()].map(c => c.game)])];
+  IX = {byCard, byLot, byKey, games};
+  return IX;
+}
+const copiesOf = id => IX.byCard.get(id) || [];
+const lotCopies = id => IX.byLot.get(id) || [];
+function cardStats(id){
+  const cs = copiesOf(id);
+  const av = cs.filter(c => c.status !== 'venduto'), so = cs.filter(c => c.status === 'venduto');
+  const buys = cs.filter(c => c.buy_price != null && !c.lot_id);
+  const buyQty = sum(buys, c => c.qty);
+  const soldQty = sum(so, c => c.qty);
+  const singlesSold = so.filter(c => !c.lot_id && c.buy_price != null && c.sell_price != null);
+  const lastSale = so.filter(c => c.sell_date).sort((a, b) => b.sell_date.localeCompare(a.sell_date))[0];
+  return {
+    avail: sum(av, c => c.qty), sold: soldQty,
+    avgBuy: buyQty ? sum(buys, c => c.buy_price * c.qty) / buyQty : null,
+    avgSell: soldQty ? sum(so, c => c.sell_price) / soldQty : null,
+    earned: sum(so, c => c.sell_price),
+    margin: singlesSold.length ? sum(singlesSold, c => c.sell_price - c.buy_price * c.qty) : null,
+    lastSale, conds: [...new Set(av.map(c => c.condition).filter(Boolean))]
+  };
+}
+const unitSell = c => c.sell_price != null ? c.sell_price / c.qty : null;
+function findCard(game, expansion, name, rarity){ return IX.byKey.get(keyOf({game, expansion, name, rarity})); }
+async function ensureCard(tx, d){
+  const ex = S.cards.size && [...S.cards.values()].find(c => keyOf(c) === keyOf(d));
+  if (ex){ if (d.image_url && !ex.image_url) await tx.update('cards', ex.id, {image_url: d.image_url}); return ex.id; }
+  const id = uid();
+  await tx.insert('cards', {id, game: clean(d.game), expansion: clean(d.expansion), name: clean(d.name), rarity: clean(d.rarity), image_url: d.image_url || null});
+  return id;
+}
+const sameAvail = (a, b) => a.card_id === b.card_id && a.status !== 'venduto' && (a.lot_id || null) === (b.lot_id || null) &&
+  (a.condition || '') === (b.condition || '') && (a.edition || '') === (b.edition || '') && (a.language || '') === (b.language || '') &&
+  (a.buy_price ?? null) === (b.buy_price ?? null) && (a.buy_date || null) === (b.buy_date || null);
+async function addCopy(tx, cp){
+  const twin = [...S.copies.values()].find(c => c.id !== cp.id && sameAvail(c, cp) && (c.notes || '') === (cp.notes || ''));
+  if (twin) await tx.update('copies', twin.id, {qty: twin.qty + cp.qty});
+  else await tx.insert('copies', {id: uid(), status: 'disponibile', ...cp});
+}
+
+/* ===================== UI helpers ===================== */
+function busy(on){ $('#busy').className = on ? 'on' : ''; if (!on){ $('#busy').style.width = '100%'; setTimeout(() => $('#busy').style.width = '', 250); } }
+function toast(msg, kind = '', action = null){
+  const el = document.createElement('div'); el.className = 'tst ' + kind;
+  el.innerHTML = `<span>${esc(msg)}</span>` + (action ? `<button>${esc(action)}</button>` : '');
+  if (action) el.querySelector('button').onclick = () => { el.remove(); undo(); };
+  if (action) $$('#toast .tst.act').forEach(t => t.remove());
+  if (action) el.classList.add('act');
+  while ($('#toast').children.length > 2) $('#toast').firstChild.remove();
+  $('#toast').appendChild(el); setTimeout(() => el.remove(), kind === 'err' ? 7000 : 4500);
+}
+function openModal(title, body, {wide = false, onMount} = {}){
+  $('#modal').innerHTML = `<div class="mback"><div class="mbox ${wide ? 'wide' : ''}"><div class="mhead"><h3>${esc(title)}</h3><button class="x" data-close aria-label="Chiudi">×</button></div><div class="mbody">${body}</div></div></div>`;
+  const back = $('#modal .mback');
+  back.addEventListener('mousedown', e => { if (e.target === back) closeModal(); });
+  $('[data-close]', back).onclick = closeModal;
+  onMount && onMount($('#modal .mbox'));
+  setTimeout(() => { const f = $('#modal [autofocus]') || $('#modal input:not([type=hidden]):not([type=checkbox]):not([type=radio])'); f && f.focus(); }, 30);
+}
+const closeModal = () => { $('#modal').innerHTML = ''; };
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modal').innerHTML) closeModal(); });
+function confirmBox(title, msg, okLabel = 'Conferma', danger = true){
+  return new Promise(res => {
+    openModal(title, `<p style="margin:0">${msg}</p><div class="mfoot"><button class="btn" data-no>Annulla</button><button class="btn ${danger ? 'dan fill' : 'pri'}" data-yes>${esc(okLabel)}</button></div>`,
+      {onMount: m => { $('[data-no]', m).onclick = () => { closeModal(); res(false); }; $('[data-yes]', m).onclick = () => { closeModal(); res(true); }; }});
+  });
+}
+const opt = (v, sel, lbl) => `<option value="${esc(v)}" ${String(v) === String(sel ?? '') ? 'selected' : ''}>${esc(lbl ?? v)}</option>`;
+const dl = (id, arr) => `<datalist id="${id}">${[...new Set(arr.filter(Boolean))].map(v => `<option value="${esc(v)}">`).join('')}</datalist>`;
+function download(name, data, type){
+  const blob = data instanceof Blob ? data : new Blob([data], {type});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+/* ===== autocomplete ===== */
+function autocomplete(input, source, onPick){
+  const wrap = input.parentElement; wrap.classList.add('acw');
+  const box = document.createElement('div'); box.className = 'ac'; wrap.appendChild(box);
+  let items = [], sel = -1, req = 0, t;
+  const show = list => {
+    items = list; sel = -1;
+    if (document.activeElement !== input){ box.innerHTML = ''; return; }
+    let html = '', lastG = null;
+    list.forEach((it, i) => {
+      if (it.group && it.group !== lastG){ html += `<div class="hd">${esc(it.group)}</div>`; lastG = it.group; }
+      html += `<div class="it" data-i="${i}">${esc(it.label)}${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</div>`;
+    });
+    box.innerHTML = html;
+  };
+  const run = async () => { const my = ++req; const q = input.value.trim(); await source(q, list => { if (my === req) show(list); }); };
+  input.setAttribute('autocomplete', 'off');
+  input.addEventListener('input', () => { clearTimeout(t); t = setTimeout(run, 220); });
+  input.addEventListener('focus', run);
+  input.addEventListener('blur', () => setTimeout(() => { box.innerHTML = ''; }, 180));
+  input.addEventListener('keydown', e => {
+    const els = $$('.it', box); if (!els.length) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+      e.preventDefault(); sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + els.length) % els.length;
+      els.forEach((el, i) => el.classList.toggle('on', i === sel)); els[sel].scrollIntoView({block: 'nearest'});
+    } else if (e.key === 'Enter' && sel >= 0){ e.preventDefault(); pick(sel); }
+    else if (e.key === 'Escape'){ box.innerHTML = ''; e.stopPropagation(); }
+  });
+  box.addEventListener('mousedown', e => { const it = e.target.closest('.it'); if (it){ e.preventDefault(); pick(+it.dataset.i); } });
+  const pick = i => { const it = items[i]; box.innerHTML = ''; req++; onPick(it); };
+}
+
+/* ===== database pubblici per i suggerimenti ===== */
+const apiCache = new Map();
+async function cachedJson(url){
+  if (apiCache.has(url)) return apiCache.get(url);
+  const p = fetch(url).then(r => r.ok ? r.json() : null).catch(() => null);
+  apiCache.set(url, p); return p;
+}
+async function remoteNames(game, q){
+  if (game === 'Yu-Gi-Oh!' && q.length >= 3){
+    const j = await cachedJson(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(q)}&num=12&offset=0`);
+    return (j?.data || []).map(c => ({label: c.name, sub: `${c.type || ''}${c.card_sets ? ' · ' + c.card_sets.length + ' stampe' : ''}`, value: c.name, group: 'Database Yu-Gi-Oh!',
+      image: c.card_images?.[0]?.image_url_small, sets: (c.card_sets || []).map(s => ({expansion: s.set_name, rarity: s.set_rarity, code: s.set_code, image: c.card_images?.[0]?.image_url_small}))}));
+  }
+  if (game === 'Pokémon' && q.length >= 2){
+    const j = await cachedJson(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(`name:"${q.replace(/"/g, '')}*"`)}&pageSize=20&orderBy=-set.releaseDate&select=id,name,rarity,set,number,images`);
+    const data = j?.data || [];
+    const setsByName = {};
+    data.forEach(c => (setsByName[c.name] ||= []).push({expansion: c.set?.name, rarity: c.rarity || '', code: `${c.set?.id || ''} ${c.number || ''}`.trim(), image: c.images?.small}));
+    return data.map(c => ({label: c.name, sub: `${c.set?.name || ''} · ${c.rarity || '—'} · #${c.number || ''}`, value: c.name, group: 'Database Pokémon',
+      pick: {expansion: c.set?.name, rarity: c.rarity || '', image: c.images?.small}, sets: setsByName[c.name]}));
+  }
+  return [];
+}
+
+/* ===================== IMMAGINI ===================== */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const IMG_GAMES = ['Pokémon', 'Yu-Gi-Oh!'];
+const baseName = n => clean(String(n).replace(/\s*[\[(].*?[\])]\s*/g, ' '));
+/** Cerca immagini candidate per una carta nei database pubblici */
+async function findImages(card){
+  const name = baseName(card.name), out = [];
+  if (card.game === 'Pokémon'){
+    const qn = `name:"${name.replace(/"/g, '')}"`;
+    const sel = '&pageSize=12&select=name,images,rarity,set,number';
+    let d = card.expansion ? ((await cachedJson(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(qn + ` set.name:"${card.expansion.replace(/"/g, '')}"`)}${sel}`))?.data || []) : [];
+    if (!d.length) d = (await cachedJson(`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(qn)}${sel}&orderBy=-set.releaseDate`))?.data || [];
+    d.sort((a, b) => (norm(b.rarity) === norm(card.rarity)) - (norm(a.rarity) === norm(card.rarity)));
+    d.forEach(x => x.images?.small && out.push({url: x.images.small, label: `${x.set?.name || ''} #${x.number || ''}`}));
+  } else if (card.game === 'Yu-Gi-Oh!'){
+    const base = 'https://db.ygoprodeck.com/api/v7/cardinfo.php?';
+    let j = await cachedJson(base + 'name=' + encodeURIComponent(name));
+    if (!j?.data) j = await cachedJson(base + 'fname=' + encodeURIComponent(name) + '&num=5&offset=0');
+    if (!j?.data) j = await cachedJson(base + 'fname=' + encodeURIComponent(name) + '&language=it&num=5&offset=0');
+    (j?.data || []).forEach(c => (c.card_images || []).forEach((im, i) => out.push({url: im.image_url_small || im.image_url, label: c.name + (c.card_images.length > 1 ? ` · artwork ${i + 1}` : '')})));
+  }
+  return out;
+}
+/** Ridimensiona un'immagine (Blob) in JPEG */
+async function resizeBlob(blob, max = 480){
+  const bmp = await createImageBitmap(blob);
+  const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+  cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+  return new Promise(r => cv.toBlob(r, 'image/jpeg', .85));
+}
+const blobToDataUrl = b => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); });
+/** Salva un'immagine (Blob o URL) nello Storage di Supabase e restituisce l'URL pubblico */
+async function storeImage(cardId, src){
+  if (typeof src === 'string'){
+    if (S.mode !== 'supabase' || !/ygoprodeck\.com/.test(src)) return src; // Pokémon: le immagini ufficiali si possono usare direttamente
+    try { const r = await fetch(src); if (!r.ok) throw 0; src = await r.blob(); } catch { return src; }
+  }
+  const small = await resizeBlob(src, S.mode === 'supabase' ? 480 : 260);
+  if (S.mode !== 'supabase') return blobToDataUrl(small);
+  const path = `${S.user.id}/${cardId}.jpg`;
+  const {error} = await sb.storage.from('card-images').upload(path, small, {contentType: 'image/jpeg', upsert: true});
+  if (error) throw new Error(/bucket/i.test(error.message) ? 'manca lo spazio immagini su Supabase: riesegui schema.sql' : error.message);
+  return sb.storage.from('card-images').getPublicUrl(path).data.publicUrl + '?v=' + Date.now();
+}
+const thumbHtml = c => `<span class="thumb" data-thumb="${c.id}">${c.image_url ? `<img src="${esc(c.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer"><img class="big" src="${esc(c.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<i class="${gameCls(c.game)}">${esc(gameAbbr(c.game))}</i>`}</span>`;
+const bigImgHtml = c => c.image_url ? `<img src="${esc(c.image_url)}" alt="${esc(c.name)}" referrerpolicy="no-referrer">` : `<div class="ph"><div class="gicon ${gameCls(c.game)}" style="margin:0 auto">${esc(gameAbbr(c.game))}</div><b>${esc(c.name)}</b><small>${esc(c.rarity)}</small></div>`;
+function refreshImg(id){
+  const c = S.cards.get(id); if (!c) return;
+  $$(`[data-thumb="${id}"]`).forEach(el => { el.outerHTML = thumbHtml(c); });
+  $$(`[data-cimg="${id}"] .imgslot`).forEach(el => { el.innerHTML = bigImgHtml(c); });
+}
+async function setCardImage(id, url, {quiet = false} = {}){
+  const c = S.cards.get(id); if (!c) return;
+  if (quiet){ await DB.update('cards', [id], {image_url: url}); S.cards.set(id, {...c, image_url: url}); IX && IX.byKey.set(keyOf(c), S.cards.get(id)); refreshImg(id); }
+  else await commit(url ? `Immagine aggiornata: ${c.name}` : `Immagine rimossa: ${c.name}`, async tx => tx.update('cards', id, {image_url: url}));
+}
+// coda automatica: cerca le immagini mancanti senza intasare i database pubblici
+const imgQ = [], imgTried = new Set(); let imgRunning = false;
+const needsImg = c => c && IMG_GAMES.includes(c.game) && (!c.image_url || (S.mode === 'supabase' && /ygoprodeck\.com/.test(c.image_url)));
+function queueImages(ids){
+  if (localStorage.getItem('cardarchive.autoimg') === 'off') return;
+  ids.forEach(id => { if (!imgTried.has(id) && needsImg(S.cards.get(id))){ imgTried.add(id); imgQ.push(id); } });
+  runImgQ();
+}
+async function runImgQ(){
+  if (imgRunning) return; imgRunning = true;
+  while (imgQ.length && S.user){
+    const id = imgQ.shift(), c = S.cards.get(id);
+    try {
+      if (needsImg(c)){
+        const url = c.image_url || (await findImages(c))[0]?.url;
+        if (url){ const fin = await storeImage(id, url); if (fin !== c.image_url) await setCardImage(id, fin, {quiet: true}); }
+      }
+    } catch (e){ console.warn('immagine', c?.name, e); }
+    await sleep(160);
+  }
+  imgRunning = false;
+}
+function imageForm(id){
+  const c = S.cards.get(id);
+  openModal(`Immagine · ${c.name}`, `
+    <div class="row" style="align-items:flex-start">
+      <div class="cimg" style="width:130px;cursor:default"><div class="imgslot" style="width:100%;height:100%;display:grid;place-items:center">${bigImgHtml(c)}</div></div>
+      <div style="flex:1 1 260px">
+        <label class="btn pri" style="margin-bottom:8px"><input type="file" accept="image/*" id="imgfile" hidden>📷 Carica una foto</label>
+        <div class="small muted" style="margin-bottom:12px">Dal telefono puoi scattarla direttamente con la fotocamera.</div>
+        <label class="f">Oppure incolla il link di un'immagine</label>
+        <div style="display:flex;gap:6px"><input class="inp" id="imgurl" placeholder="https://…"><button class="btn" id="imgurlok">Usa</button></div>
+        <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">${IMG_GAMES.includes(c.game) ? '<button class="btn" id="imgsearch">🔎 Cerca online</button>' : ''}${c.image_url ? '<button class="btn dan" id="imgdel">Rimuovi immagine</button>' : ''}</div>
+      </div>
+    </div>
+    <div id="imgres"></div>`, {wide: true, onMount: m => {
+    const done = async url => { $('#imgres', m).innerHTML = '<div class="muted" style="margin-top:10px">Salvataggio…</div>'; try { const fin = await storeImage(id, url); closeModal(); await setCardImage(id, fin); } catch (e){ toast('Errore immagine: ' + e.message, 'err'); $('#imgres', m).innerHTML = ''; } };
+    $('#imgfile', m).onchange = e => e.target.files[0] && done(e.target.files[0]);
+    $('#imgurlok', m).onclick = () => { const u = clean($('#imgurl', m).value); if (/^https?:\/\//.test(u)) done(u); else toast('Link non valido', 'err'); };
+    $('#imgdel', m) && ($('#imgdel', m).onclick = async () => { closeModal(); await setCardImage(id, null); imgTried.add(id); });
+    $('#imgsearch', m) && ($('#imgsearch', m).onclick = async () => {
+      $('#imgres', m).innerHTML = '<div class="muted" style="margin-top:10px">Ricerca…</div>';
+      const list = await findImages(c);
+      $('#imgres', m).innerHTML = list.length ? `<div class="small muted" style="margin-top:12px">Clicca l'immagine giusta:</div><div class="imgprev">${list.slice(0, 18).map((x, i) => `<img src="${esc(x.url)}" title="${esc(x.label)}" data-i="${i}" referrerpolicy="no-referrer">`).join('')}</div>`
+        : '<div class="note" style="margin-top:10px">Nessuna immagine trovata. Prova a controllare il nome (in inglese) o carica una foto.</div>';
+      $$('.imgprev img', m).forEach(im => im.onclick = () => done(list[+im.dataset.i].url));
+    });
+  }});
+}
+
+/* ===================== layout ===================== */
+function route(){
+  const h = location.hash.slice(1) || '/';
+  const [path, qs] = h.split('?');
+  return {parts: path.split('/').filter(Boolean).map(dec), q: new URLSearchParams(qs || '')};
+}
+function shell(){
+  const r = route(), p0 = r.parts[0] || '', g = p0 === 'g' || p0 === 'c' ? (p0 === 'g' ? r.parts[1] : S.cards.get(r.parts[1])?.game) : null;
+  const nav = (href, lbl, on) => `<a href="${href}" class="${on ? 'on' : ''}">${lbl}</a>`;
+  return `
+  <header class="top"><div class="top-in">
+    <a class="logo" href="#/"><i>CA</i>Card<span>Archive</span></a>
+    <div class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="gsearch" placeholder="Cerca una carta nel tuo archivio…"></div>
+    <div class="top-actions">
+      <button class="tbtn" data-act="undo" ${undoStack.length ? '' : 'disabled'} title="${undoStack.length ? 'Annulla: ' + esc(undoStack.at(-1).label) : 'Niente da annullare'}">↶ <span class="lbl">Annulla</span></button>
+      <button class="tbtn" data-act="addCard">＋ <span class="lbl">Aggiungi carta</span></button>
+      <button class="tbtn" data-act="settings" title="${esc(S.user?.email || '')}">⚙</button>
+    </div>
+  </div>
+  <nav class="subnav"><div class="subnav-in">
+    ${nav('#/', 'Home', p0 === '')}
+    ${IX.games.map(x => nav('#/g/' + enc(x), esc(x), g === x)).join('')}
+    <span class="sep"></span>
+    ${nav('#/collezione', 'Collezione', p0 === 'collezione')}
+    ${nav('#/lotti', 'Lotti', p0 === 'lotti' || p0 === 'lotto')}
+    ${nav('#/guadagni', 'Guadagni', p0 === 'guadagni')}
+    ${nav('#/dati', 'Importa / Esporta', p0 === 'dati')}
+  </div></nav></header>
+  <main id="app"></main>`;
+}
+let lastShellKey = '';
+function render(){
+  if (!S.user){ renderAuth(); return; }
+  index();
+  $('#root').innerHTML = shell();
+  autocomplete($('#gsearch'), async (q, cb) => {
+    if (!q){ cb([]); return; }
+    const f = fold(q);
+    cb([...S.cards.values()].filter(c => fold(c.name).includes(f)).slice(0, 10)
+      .map(c => ({label: c.name, sub: `${c.game} · ${c.expansion || '—'} · ${c.rarity || '—'}`, id: c.id})));
+  }, it => { location.hash = '#/c/' + it.id; });
+  $('#gsearch').addEventListener('keydown', e => { if (e.key === 'Enter' && !$('.ac .it.on')){ F.q = e.target.value; F.p = 0; location.hash = '#/collezione'; render(); } });
+  const r = route(), [p0, p1, p2] = r.parts;
+  const app = $('#app');
+  try {
+    if (!p0) pageHome(app);
+    else if (p0 === 'g' && p2 !== undefined) pageExpansion(app, p1, p2);
+    else if (p0 === 'g') pageGame(app, p1);
+    else if (p0 === 'c') pageCard(app, p1);
+    else if (p0 === 'collezione') pageCollection(app);
+    else if (p0 === 'lotti') pageLots(app);
+    else if (p0 === 'lotto') pageLot(app, p1);
+    else if (p0 === 'guadagni') pageEarnings(app);
+    else if (p0 === 'dati') pageData(app);
+    else app.innerHTML = `<div class="panel empty">Pagina non trovata. <a href="#/">Torna alla home</a></div>`;
+  } catch (e){ console.error(e); app.innerHTML = `<div class="panel">Errore di visualizzazione: ${esc(e.message)}</div>`; }
+}
+window.addEventListener('hashchange', () => { window.scrollTo(0, 0); render(); });
+
+/* ===================== HOME ===================== */
+function totals(game){
+  const cards = [...S.cards.values()].filter(c => !game || c.game === game);
+  const ids = new Set(cards.map(c => c.id));
+  const cps = [...S.copies.values()].filter(c => ids.has(c.card_id));
+  const av = cps.filter(c => c.status !== 'venduto');
+  const lotIds = new Set(cps.map(c => c.lot_id).filter(Boolean));
+  const lots = game ? [...lotIds].map(id => S.lots.get(id)).filter(Boolean) : [...S.lots.values()];
+  const spentSingles = sum(cps.filter(c => !c.lot_id), c => (c.buy_price || 0) * c.qty);
+  const spentLots = sum(lots, l => l.total_price);
+  const earned = sum(cps.filter(c => c.status === 'venduto'), c => c.sell_price);
+  return {cards: cards.filter(c => copiesOf(c.id).some(x => x.status !== 'venduto')).length, avail: sum(av, c => c.qty),
+    sold: sum(cps.filter(c => c.status === 'venduto'), c => c.qty), spent: spentSingles + spentLots, spentLots, earned,
+    stockCost: sum(av.filter(c => !c.lot_id), c => (c.buy_price || 0) * c.qty)};
+}
+function statTiles(t){
+  return `<div class="stats">
+    <div class="stat"><div class="l">Copie disponibili</div><div class="v">${t.avail.toLocaleString('it-IT')}</div><div class="s">${t.cards.toLocaleString('it-IT')} carte diverse</div></div>
+    <div class="stat"><div class="l">Speso</div><div class="v">${eur(t.spent)}</div><div class="s">di cui lotti ${eur(t.spentLots)}</div></div>
+    <div class="stat"><div class="l">Incassato</div><div class="v">${eur(t.earned)}</div><div class="s">${t.sold.toLocaleString('it-IT')} copie vendute</div></div>
+    <div class="stat"><div class="l">Saldo</div><div class="v">${signEur(t.earned - t.spent)}</div><div class="s">incassato − speso</div></div>
+  </div>`;
+}
+function pageHome(app){
+  const t = totals();
+  const ev = [];
+  for (const c of S.copies.values()){
+    const card = S.cards.get(c.card_id); if (!card) continue;
+    if (c.status === 'venduto' && c.sell_date) ev.push({d: c.sell_date, kind: 'v', c, card});
+    if (c.buy_date) ev.push({d: c.buy_date, kind: 'a', c, card});
+  }
+  ev.sort((a, b) => b.d.localeCompare(a.d) || (b.c.created_at || '').localeCompare(a.c.created_at || ''));
+  app.innerHTML = `
+    <div class="pagehead"><div class="grow"><h1>Il tuo archivio</h1><div class="muted">Ciao ${esc(S.user.email || '')} · ${S.mode === 'local' ? 'dati salvati solo in questo browser' : 'sincronizzato con Supabase'}</div></div>
+      <button class="btn pri" data-act="addCard">＋ Aggiungi carta</button></div>
+    ${statTiles(t)}
+    <div class="panel"><h2>Giochi</h2><div class="games">
+      ${IX.games.map(g => { const gt = totals(g); const ex = new Set([...S.cards.values()].filter(c => c.game === g).map(c => c.expansion)).size;
+        return `<a class="game" href="#/g/${enc(g)}"><div class="gicon ${gameCls(g)}">${esc(gameAbbr(g))}</div><div><b>${esc(g)}</b><div class="small muted">${gt.avail} copie · ${ex} espansioni</div><div class="small">${signEur(gt.earned - gt.spent)}</div></div></a>`; }).join('')}
+    </div></div>
+    <div class="panel flush"><div class="panel-h"><h2>Attività recente</h2></div>
+      ${ev.length ? `<div class="tw"><table class="t"><thead><tr><th>Data</th><th>Tipo</th><th>Carta</th><th class="hide-m">Espansione</th><th>Q.tà</th><th class="right">Prezzo</th></tr></thead><tbody>
+      ${ev.slice(0, 12).map(e => `<tr><td class="nowrap">${fdate(e.d)}</td><td>${e.kind === 'v' ? '<span class="b st-d">Vendita</span>' : '<span class="b rar">Acquisto</span>'}</td>
+        <td><a class="cname" href="#/c/${e.card.id}">${esc(e.card.name)}</a></td><td class="hide-m muted">${esc(e.card.expansion || '—')}</td><td>${e.c.qty}</td>
+        <td class="right nowrap">${e.kind === 'v' ? eur(e.c.sell_price) : e.c.lot_id ? '<span class="b lotb">lotto</span>' : eur((e.c.buy_price || 0) * e.c.qty)}</td></tr>`).join('')}
+      </tbody></table></div>` : `<div class="empty">Ancora nessuna carta. Inizia con <a href="#" data-act="addCard">Aggiungi carta</a> o <a href="#/dati">importa il tuo Excel</a>.</div>`}
+    </div>`;
+}
+
+/* ===================== GIOCO → ESPANSIONI ===================== */
+function pageGame(app, game){
+  const cards = [...S.cards.values()].filter(c => c.game === game);
+  const ex = new Map();
+  for (const c of cards){
+    const e = ex.get(c.expansion) || {name: c.expansion, cards: 0, avail: 0, sold: 0, earned: 0};
+    const st = cardStats(c.id); e.cards++; e.avail += st.avail; e.sold += st.sold; e.earned += st.earned; ex.set(c.expansion, e);
+  }
+  const list = [...ex.values()].sort((a, b) => a.name.localeCompare(b.name, 'it'));
+  app.innerHTML = `
+    <div class="crumbs"><a href="#/">Home</a> › <b>${esc(game)}</b></div>
+    <div class="pagehead"><div class="gicon ${gameCls(game)}">${esc(gameAbbr(game))}</div><div class="grow"><h1>${esc(game)}</h1><div class="muted">${list.length} espansioni · ${cards.length} carte</div></div>
+      <button class="btn pri" data-act="addCard" data-game="${esc(game)}">＋ Aggiungi carta</button></div>
+    ${statTiles(totals(game))}
+    <div class="panel flush"><div class="panel-h"><h2>Espansioni</h2><div class="grow"></div><input class="inp" id="exf" placeholder="Filtra espansioni…" style="max-width:240px"></div>
+    ${list.length ? `<div class="tw"><table class="t" id="extab"><thead><tr><th>Espansione</th><th class="right">Carte</th><th class="right">Disponibili</th><th class="right">Vendute</th><th class="right hide-m">Incassato</th></tr></thead><tbody>
+      ${list.map(e => `<tr data-f="${esc(fold(e.name))}"><td><a class="cname" href="#/g/${enc(game)}/${enc(e.name)}">${esc(e.name || '(senza espansione)')}</a></td><td class="right">${e.cards}</td><td class="right">${e.avail}</td><td class="right">${e.sold}</td><td class="right hide-m">${eur(e.earned)}</td></tr>`).join('')}
+    </tbody></table></div>` : `<div class="empty">Nessuna carta di ${esc(game)} nell'archivio.</div>`}</div>`;
+  const f = $('#exf'); f && f.addEventListener('input', () => { const v = fold(f.value); $$('#extab tbody tr').forEach(tr => tr.style.display = tr.dataset.f.includes(v) ? '' : 'none'); });
+}
+
+/* ===== tabella carte riusabile ===== */
+function cardRowsTable(cards, {showGame = false, showExp = true} = {}){
+  if (!cards.length) return `<div class="empty">Nessuna carta trovata.</div>`;
+  queueImages(cards.slice(0, 150).map(x => x.c.id));
+  return `<div class="tw"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th>${showExp ? '<th class="hide-m">Espansione</th>' : ''}<th>Rarità</th>${showGame ? '<th class="hide-m">Gioco</th>' : ''}<th class="hide-m">Condizioni</th><th class="right">Disp.</th><th class="right">Vend.</th><th class="right hide-m">Acq. medio</th><th class="right">Vend. medio</th></tr></thead><tbody>
+  ${cards.map(({c, st}) => `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${esc(c.name)}</a></td>${showExp ? `<td class="hide-m muted">${esc(c.expansion || '—')}</td>` : ''}<td>${c.rarity ? `<span class="b rar">${esc(c.rarity)}</span>` : ''}</td>
+    ${showGame ? `<td class="hide-m">${esc(c.game)}</td>` : ''}<td class="hide-m">${st.conds.map(condB).join(' ')}</td><td class="right"><b>${st.avail}</b></td><td class="right">${st.sold}</td>
+    <td class="right hide-m">${eur(st.avgBuy)}</td><td class="right">${eur(st.avgSell)}</td></tr>`).join('')}
+  </tbody></table></div>`;
+}
+function pageExpansion(app, game, exp){
+  const cards = [...S.cards.values()].filter(c => c.game === game && c.expansion === exp).map(c => ({c, st: cardStats(c.id)})).sort((a, b) => a.c.name.localeCompare(b.c.name, 'it'));
+  app.innerHTML = `
+    <div class="crumbs"><a href="#/">Home</a> › <a href="#/g/${enc(game)}">${esc(game)}</a> › <b>${esc(exp || '(senza espansione)')}</b></div>
+    <div class="pagehead"><div class="grow"><h1>${esc(exp || '(senza espansione)')}</h1><div class="muted">${esc(game)} · ${cards.length} carte · ${sum(cards, x => x.st.avail)} copie disponibili</div></div>
+      <button class="btn pri" data-act="addCard" data-game="${esc(game)}" data-exp="${esc(exp)}">＋ Aggiungi carta</button></div>
+    <div class="panel flush">${cardRowsTable(cards, {showExp: false})}</div>`;
+}
+
+/* ===================== COLLEZIONE ===================== */
+const F = {game: '', st: 'disp', q: '', sort: 'name', dir: 1, p: 0};
+const PAGE = 100;
+function pageCollection(app){
+  app.innerHTML = `
+    <div class="crumbs"><a href="#/">Home</a> › <b>Collezione</b></div>
+    <div class="pagehead"><div class="grow"><h1>Collezione</h1></div><button class="btn pri" data-act="addCard">＋ Aggiungi carta</button></div>
+    <div class="panel flush"><div class="panel-h filters">
+      <select class="inp" id="fgame">${opt('', F.game, 'Tutti i giochi')}${IX.games.map(g => opt(g, F.game)).join('')}</select>
+      <div class="seg" id="fst">${[['disp', 'Disponibili'], ['vend', 'Vendute'], ['all', 'Tutte']].map(([v, l]) => `<button data-v="${v}" class="${F.st === v ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <input class="inp grow" id="fq" placeholder="Cerca nome, espansione, rarità…" value="${esc(F.q)}" style="min-width:180px">
+      <span class="muted small" id="fcount"></span>
+    </div><div id="ctab"></div></div>`;
+  $('#fgame').onchange = e => { F.game = e.target.value; F.p = 0; drawColl(); };
+  $$('#fst button').forEach(b => b.onclick = () => { F.st = b.dataset.v; F.p = 0; $$('#fst button').forEach(x => x.classList.toggle('on', x === b)); drawColl(); });
+  let t; $('#fq').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { F.q = e.target.value; F.p = 0; drawColl(); }, 200); });
+  drawColl();
+}
+function drawColl(){
+  const q = fold(F.q);
+  let rows = [...S.cards.values()].filter(c => (!F.game || c.game === F.game) && (!q || fold(`${c.name} ${c.expansion} ${c.rarity}`).includes(q)))
+    .map(c => ({c, st: cardStats(c.id)}))
+        .filter(x => F.st === 'all' ? true : F.st === 'disp' ? x.st.avail > 0 : x.st.sold > 0);
+  const val = {name: x => x.c.name.toLowerCase(), exp: x => x.c.expansion.toLowerCase(), rar: x => x.c.rarity.toLowerCase(), game: x => x.c.game,
+    avail: x => x.st.avail, sold: x => x.st.sold, buy: x => x.st.avgBuy ?? -1, sell: x => x.st.avgSell ?? -1}[F.sort];
+  rows.sort((a, b) => { const A = val(a), B = val(b); return (A < B ? -1 : A > B ? 1 : a.c.name.localeCompare(b.c.name)) * F.dir; });
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE)); F.p = Math.min(F.p, pages - 1);
+  const slice = rows.slice(F.p * PAGE, F.p * PAGE + PAGE);
+  $('#fcount').textContent = `${rows.length} carte · ${sum(rows, x => F.st === 'vend' ? x.st.sold : x.st.avail)} copie`;
+  const th = (k, l, cls = '') => `<th class="sortable ${cls}" data-sort="${k}">${l}${F.sort === k ? (F.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
+  $('#ctab').innerHTML = !slice.length ? `<div class="empty">Nessuna carta trovata.</div>` : `<div class="tw"><table class="t"><thead><tr><th class="tc"></th>
+    ${th('name', 'Carta')}${th('exp', 'Espansione', 'hide-m')}${th('rar', 'Rarità')}${F.game ? '' : th('game', 'Gioco', 'hide-m')}<th class="hide-m">Condizioni</th>
+    ${th('avail', 'Disp.', 'right')}${th('sold', 'Vend.', 'right')}${th('buy', 'Acq. medio', 'right hide-m')}${th('sell', 'Vend. medio', 'right')}</tr></thead><tbody>
+    ${slice.map(({c, st}) => `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${esc(c.name)}</a></td><td class="hide-m muted">${esc(c.expansion || '—')}</td><td>${c.rarity ? `<span class="b rar">${esc(c.rarity)}</span>` : ''}</td>
+      ${F.game ? '' : `<td class="hide-m">${esc(c.game)}</td>`}<td class="hide-m">${st.conds.map(condB).join(' ')}</td><td class="right"><b>${st.avail}</b></td><td class="right">${st.sold}</td>
+      <td class="right hide-m">${eur(st.avgBuy)}</td><td class="right">${eur(st.avgSell)}</td></tr>`).join('')}
+    </tbody></table></div>
+    ${pages > 1 ? `<div class="pager"><button class="btn sm" data-pg="${F.p - 1}" ${F.p ? '' : 'disabled'}>‹</button><span class="small muted">Pagina ${F.p + 1} di ${pages}</span><button class="btn sm" data-pg="${F.p + 1}" ${F.p < pages - 1 ? '' : 'disabled'}>›</button></div>` : ''}`;
+  queueImages(slice.map(x => x.c.id));
+  $$('#ctab th[data-sort]').forEach(h => h.onclick = () => { const k = h.dataset.sort; F.dir = F.sort === k ? -F.dir : (['avail', 'sold', 'buy', 'sell'].includes(k) ? -1 : 1); F.sort = k; drawColl(); });
+  $$('#ctab [data-pg]').forEach(b => b.onclick = () => { F.p = +b.dataset.pg; drawColl(); window.scrollTo(0, 0); });
+}
+
+/* ===================== PAGINA CARTA ===================== */
+function lineChart(series){
+  const W = 640, H = 230, P = {l: 56, r: 14, t: 14, b: 30};
+  const all = series.flatMap(s => s.pts);
+  if (!all.length) return `<div class="empty">Nessun prezzo registrato per questa carta.</div>`;
+  let x0 = Math.min(...all.map(p => p.x)), x1 = Math.max(...all.map(p => p.x));
+  if (x1 - x0 < 864e5 * 20){ x0 -= 864e5 * 15; x1 += 864e5 * 15; }
+  const y1 = Math.max(...all.map(p => p.y)) * 1.15 || 1;
+  const sx = x => P.l + (x - x0) / (x1 - x0) * (W - P.l - P.r), sy = y => H - P.b - y / y1 * (H - P.t - P.b);
+  let g = '';
+  for (let i = 0; i <= 4; i++){ const v = y1 * i / 4, y = sy(v); g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y}" y2="${y}" stroke="#e8ecf2"/><text x="${P.l - 6}" y="${y + 4}" text-anchor="end" font-size="11" fill="#6b7686">${EUR.format(v).replace(/,00/, '')}</text>`; }
+  for (let i = 0; i <= 3; i++){ const x = x0 + (x1 - x0) * i / 3; g += `<text x="${sx(x)}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === 3 ? 'end' : 'middle'}" font-size="11" fill="#6b7686">${fdate(isoLocal(new Date(x)))}</text>`; }
+  for (const s of series){
+    const pts = [...s.pts].sort((a, b) => a.x - b.x);
+    if (pts.length > 1) g += `<polyline fill="none" stroke="${s.color}" stroke-width="2" stroke-opacity=".55" points="${pts.map(p => `${sx(p.x)},${sy(p.y)}`).join(' ')}"/>`;
+    g += pts.map(p => `<circle cx="${sx(p.x)}" cy="${sy(p.y)}" r="4.5" fill="${s.color}" stroke="#fff" stroke-width="1.5"><title>${esc(s.name)} · ${fdate(isoLocal(new Date(p.x)))} · ${EUR.format(p.y)}${p.n > 1 ? ' (×' + p.n + ')' : ''}</title></circle>`).join('');
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Storico prezzi">${g}</svg>
+    <div class="legend">${series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join('')}</div>`;
+}
+const dpt = d => new Date(d + 'T12:00:00').getTime();
+function pageCard(app, id){
+  const c = S.cards.get(id);
+  if (!c){ app.innerHTML = `<div class="panel empty">Carta non trovata (forse è stata unita o eliminata). <a href="#/collezione">Vai alla collezione</a></div>`; return; }
+  const st = cardStats(id), cs = copiesOf(id);
+  const av = cs.filter(x => x.status !== 'venduto').sort((a, b) => (a.buy_date || '').localeCompare(b.buy_date || ''));
+  const so = cs.filter(x => x.status === 'venduto').sort((a, b) => (b.sell_date || '').localeCompare(a.sell_date || ''));
+  const buysAll = cs.filter(x => x.buy_date).sort((a, b) => b.buy_date.localeCompare(a.buy_date));
+  const chart = lineChart([
+    {name: 'Acquisto (unitario)', color: '#1e6fd9', pts: cs.filter(x => x.buy_date && x.buy_price != null && !x.lot_id).map(x => ({x: dpt(x.buy_date), y: x.buy_price, n: x.qty}))},
+    {name: 'Vendita (unitario)', color: '#23905a', pts: so.filter(x => x.sell_date && x.sell_price != null).map(x => ({x: dpt(x.sell_date), y: unitSell(x), n: x.qty}))}
+  ]);
+  const lotLink = x => { const l = S.lots.get(x.lot_id); return l ? `<a class="b lotb" href="#/lotto/${l.id}" title="${esc(l.description)}">Lotto: ${esc(l.description.slice(0, 22))}${l.description.length > 22 ? '…' : ''}</a>` : '<span class="b lotb">Lotto</span>'; };
+  const attrs = x => `${condB(x.condition)} ${x.language ? `<span class="b lang">${esc(x.language)}</span>` : ''} ${x.edition ? `<span class="small muted">${esc(x.edition)}</span>` : ''}`;
+  app.innerHTML = `
+    <div class="crumbs"><a href="#/">Home</a> › <a href="#/g/${enc(c.game)}">${esc(c.game)}</a> › <a href="#/g/${enc(c.game)}/${enc(c.expansion)}">${esc(c.expansion || '(senza espansione)')}</a> › <b>${esc(c.name)}</b></div>
+    <div class="pagehead"><div class="grow"><h1>${esc(c.name)}</h1><div class="muted">${esc(c.expansion || '—')}${c.rarity ? ' · ' + esc(c.rarity) : ''}</div></div>
+      <button class="btn" data-act="editCard" data-id="${c.id}">✎ Modifica</button>
+      <button class="btn dan" data-act="delCard" data-id="${c.id}">Elimina</button>
+      <button class="btn pri" data-act="addCard" data-card="${c.id}">＋ Aggiungi copie</button></div>
+    <div class="panel"><div class="cardtop">
+      <div class="cimg" data-cimg="${c.id}" data-act="changeImg" data-id="${c.id}" title="Cambia immagine"><div class="imgslot" style="width:100%;height:100%;display:grid;place-items:center">${bigImgHtml(c)}</div><button class="imgbtn" tabindex="0">📷 Cambia immagine</button></div>
+      <div class="row" style="align-content:flex-start">
+        <dl class="info" style="flex:1 1 230px;margin:0">
+          <dt>Gioco</dt><dd>${esc(c.game)}</dd>
+          <dt>Espansione</dt><dd><a href="#/g/${enc(c.game)}/${enc(c.expansion)}">${esc(c.expansion || '—')}</a></dd>
+          <dt>Rarità</dt><dd>${c.rarity ? `<span class="b rar">${esc(c.rarity)}</span>` : '—'}</dd>
+          <dt>Disponibili</dt><dd>${st.avail}</dd>
+          <dt>Vendute</dt><dd>${st.sold}</dd>
+          <dt>Acquisto medio</dt><dd>${eur(st.avgBuy)}</dd>
+          <dt>Vendita media</dt><dd>${eur(st.avgSell)}</dd>
+          <dt>Ultima vendita</dt><dd>${st.lastSale ? `${eur(unitSell(st.lastSale))} <span class="muted small">(${fdate(st.lastSale.sell_date)})</span>` : '—'}</dd>
+          <dt>Incassato</dt><dd>${eur(st.earned)}</dd>
+          <dt>Margine singole</dt><dd>${signEur(st.margin)}</dd>
+        </dl>
+        <div class="chart" style="flex:2 1 340px"><h3 style="margin-bottom:6px">Andamento prezzi</h3>${chart}</div>
+      </div>
+    </div></div>
+
+    <div class="panel flush"><div class="panel-h"><h2>Copie disponibili</h2><span class="muted">${st.avail}</span></div>
+      ${av.length ? `<div class="tw"><table class="t"><thead><tr><th>Q.tà</th><th>Condizione / lingua</th><th>Acquistata</th><th class="right">Costo</th><th class="hide-m">Note</th><th></th></tr></thead><tbody>
+      ${av.map(x => `<tr><td><b>${x.qty}</b></td><td>${attrs(x)}</td><td class="nowrap">${fdate(x.buy_date)}</td><td class="right nowrap">${x.lot_id ? lotLink(x) : eur(x.buy_price) + (x.qty > 1 ? ' <span class="small muted">cad.</span>' : '')}</td>
+        <td class="hide-m small muted">${esc(x.notes || '')}</td>
+        <td class="acts"><button class="btn sm ok" data-act="sell" data-id="${x.id}">Vendi</button> <button class="btn sm" data-act="editCopy" data-id="${x.id}" title="Modifica">✎</button> <button class="btn sm dan" data-act="delCopy" data-id="${x.id}" title="Elimina">🗑</button></td></tr>`).join('')}
+      </tbody></table></div>` : `<div class="empty">Nessuna copia disponibile.</div>`}
+    </div>
+
+    <div class="row">
+      <div class="panel flush" style="flex:1 1 420px"><div class="panel-h"><h2>Storico vendite</h2></div>
+        ${so.length ? `<div class="tw"><table class="t"><thead><tr><th>Data</th><th>Q.tà</th><th></th><th class="hide-m">Piattaforma</th><th class="right">Incasso</th><th class="right">Margine</th><th></th></tr></thead><tbody>
+        ${so.map(x => `<tr><td class="nowrap">${fdate(x.sell_date)}</td><td>${x.qty}</td><td>${condB(x.condition)}</td><td class="hide-m">${esc(x.platform || '—')}</td>
+          <td class="right nowrap">${eur(x.sell_price)}${x.qty > 1 ? `<div class="small muted">${eur(unitSell(x))} cad.</div>` : ''}</td>
+          <td class="right">${x.lot_id ? '<span class="small muted">sul lotto</span>' : x.buy_price != null && x.sell_price != null ? signEur(x.sell_price - x.buy_price * x.qty) : '—'}</td>
+          <td class="acts"><button class="btn sm" data-act="editCopy" data-id="${x.id}">✎</button></td></tr>`).join('')}
+        </tbody></table></div>` : `<div class="empty">Nessuna vendita.</div>`}
+      </div>
+      <div class="panel flush" style="flex:1 1 380px"><div class="panel-h"><h2>Storico acquisti</h2></div>
+        ${buysAll.length ? `<div class="tw"><table class="t"><thead><tr><th>Data</th><th>Q.tà</th><th></th><th class="right">Prezzo</th><th>Stato</th></tr></thead><tbody>
+        ${buysAll.map(x => `<tr><td class="nowrap">${fdate(x.buy_date)}</td><td>${x.qty}</td><td>${condB(x.condition)}</td><td class="right nowrap">${x.lot_id ? lotLink(x) : eur(x.buy_price)}</td>
+          <td>${x.status === 'venduto' ? '<span class="b st-v">Venduta</span>' : '<span class="b st-d">Disponibile</span>'}</td></tr>`).join('')}
+        </tbody></table></div>` : `<div class="empty">Nessun acquisto con data.</div>`}
+      </div>
+    </div>`;
+  queueImages([id]);
+}
+
+/* ===================== FORM: aggiungi carta ===================== */
+function lotOptions(sel){
+  const lots = [...S.lots.values()].sort((a, b) => (b.buy_date || '').localeCompare(a.buy_date || ''));
+  return lots.map(l => opt(l.id, sel, `${fdate(l.buy_date)} · ${l.description} (${eur(l.total_price)})`)).join('');
+}
+function addCardForm(pre = {}){
+  const base = pre.card ? S.cards.get(pre.card) : null;
+  const game = base?.game || pre.game || F.game || GAMES[0];
+  const st = {sets: null, image: base?.image_url || null};
+  const html = `<form id="acf">
+    <div class="fg">
+      <div><label class="f">Gioco</label><select class="inp" name="game">${IX.games.map(g => opt(g, game)).join('')}${opt('__new', '', '＋ Altro gioco…')}</select></div>
+      <div class="full"><label class="f">Nome carta</label><div><input class="inp" name="name" required value="${esc(base?.name || '')}" placeholder="Inizia a scrivere: ti suggerisco le carte…" ${base ? '' : 'autofocus'}></div></div>
+      <div class="full"><label class="f">Espansione</label><div><input class="inp" name="expansion" value="${esc(base?.expansion ?? pre.exp ?? '')}" placeholder="Espansione / set"></div></div>
+      <div><label class="f">Rarità</label><input class="inp" name="rarity" list="dl-rar" value="${esc(base?.rarity || '')}"></div>
+      <div><label class="f">Quantità</label><input class="inp" name="qty" type="number" min="1" value="1" required></div>
+      <div><label class="f">Condizione</label><select class="inp" name="condition">${CONDS.map(c => opt(c, 'NM', `${c} – ${COND_LBL[c]}`)).join('')}</select></div>
+      <div><label class="f">Lingua</label><select class="inp" name="language">${opt('', '', '—')}${LANGS.map(l => opt(l, pre.lang || '')).join('')}</select></div>
+      <div><label class="f">Edizione</label><input class="inp" name="edition" list="dl-ed" placeholder="es. 1st Edition"></div>
+      <div><label class="f">Data acquisto</label><input class="inp" name="buy_date" type="date" value="${today()}"></div>
+    </div>
+    <fieldset style="margin-top:12px"><legend>Acquisto</legend>
+      <div class="seg" id="ptype" style="margin-bottom:10px"><button type="button" data-v="single" class="${pre.lot ? '' : 'on'}">Carta singola</button><button type="button" data-v="lot" class="${pre.lot ? 'on' : ''}">Da un lotto</button></div>
+      <div id="p-single" ${pre.lot ? 'hidden' : ''}><label class="f">Prezzo unitario (€)</label><input class="inp" name="buy_price" inputmode="decimal" placeholder="0,00" style="max-width:160px"></div>
+      <div id="p-lot" ${pre.lot ? '' : 'hidden'}>
+        <label class="f">Lotto</label><select class="inp" name="lot">${opt('__new', pre.lot, '＋ Nuovo lotto…')}${lotOptions(pre.lot || [...S.lots.values()].at(-1)?.id)}</select>
+        <div id="newlot" class="fg" style="margin-top:10px">
+          <div class="full"><label class="f">Descrizione lotto</label><input class="inp" name="lot_desc" placeholder="es. Lotto 20 carte da Vinted"></div>
+          <div><label class="f">Data</label><input class="inp" name="lot_date" type="date" value="${today()}"></div>
+          <div><label class="f">Prezzo totale (€)</label><input class="inp" name="lot_price" inputmode="decimal" placeholder="0,00"></div>
+        </div>
+        <div class="small muted" style="margin-top:6px">Il costo del lotto resta condiviso: il guadagno si calcola sul lotto intero.</div>
+      </div>
+    </fieldset>
+    <div style="margin-top:12px"><label class="f">Note</label><input class="inp" name="notes"></div>
+    <div id="mergehint" class="note" style="margin-top:12px" hidden></div>
+    <div class="mfoot"><button type="button" class="btn" data-close2>Annulla</button><button type="submit" class="btn" name="again" value="1">Salva e aggiungi altra</button><button type="submit" class="btn pri">Salva</button></div>
+    ${dl('dl-ed', EDITIONS)}<datalist id="dl-rar"></datalist>
+  </form>`;
+  openModal(base ? 'Aggiungi copie' : 'Aggiungi carta', html, {wide: true, onMount: m => {
+    const f = $('#acf', m), E = n => f.elements[n];
+    $('[data-close2]', m).onclick = closeModal;
+    const curGame = () => E('game').value;
+    const fillRar = () => { $('#dl-rar', m).innerHTML = [...new Set([...(RARITIES[curGame()] || []), ...[...S.cards.values()].filter(c => c.game === curGame()).map(c => c.rarity)])].filter(Boolean).map(v => `<option value="${esc(v)}">`).join(''); };
+    fillRar();
+    E('game').onchange = async () => {
+      if (E('game').value === '__new'){
+        const n = prompt('Nome del gioco (es. Magic, Lorcana, Dragon Ball):'); const g = gameName(n);
+        if (!g){ E('game').value = GAMES[0]; return; }
+        if (![...E('game').options].some(o => o.value === g)) E('game').insertAdjacentHTML('afterbegin', opt(g, g));
+        E('game').value = g;
+      }
+      st.sets = null; fillRar(); hint();
+    };
+    const hint = () => {
+      const ex = findCard(curGame(), E('expansion').value, E('name').value, E('rarity').value);
+      const h = $('#mergehint', m);
+      if (ex && E('name').value.trim()){ const s = cardStats(ex.id); h.hidden = false; h.innerHTML = `Questa carta è già nel tuo archivio (${s.avail} disponibili): le nuove copie finiranno nella stessa riga.`; } else h.hidden = true;
+    };
+    ['name', 'expansion', 'rarity'].forEach(n => E(n).addEventListener('change', hint));
+    autocomplete(E('name'), async (q, cb) => {
+      const f2 = fold(q), g = curGame();
+      const seen = new Set();
+      const local = [...S.cards.values()].filter(c => c.game === g && (!f2 || fold(c.name).includes(f2)))
+        .filter(c => { const k = norm(c.name); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 8)
+        .map(c => ({label: c.name, sub: 'Nel tuo archivio', value: c.name, group: 'Il tuo archivio', localName: true}));
+      cb(local);
+      if (q.length >= 2){ const rem = await remoteNames(g, q); cb([...local, ...rem.filter(r => !seen.has(norm(r.value))).slice(0, 12)]); }
+    }, it => {
+      E('name').value = it.value;
+      st.sets = it.sets || null;
+      if (it.localName){
+        const vars = [...S.cards.values()].filter(c => c.game === curGame() && norm(c.name) === norm(it.value));
+        st.sets = vars.map(c => ({expansion: c.expansion, rarity: c.rarity, code: 'nel tuo archivio', image: c.image_url}));
+        if (vars.length === 1){ E('expansion').value = vars[0].expansion; E('rarity').value = vars[0].rarity; }
+      }
+      if (it.pick){ E('expansion').value = it.pick.expansion || ''; E('rarity').value = it.pick.rarity || ''; st.image = it.pick.image || null; }
+      else if (st.sets && st.sets.length === 1){ E('expansion').value = st.sets[0].expansion; E('rarity').value = st.sets[0].rarity; st.image = st.sets[0].image || null; }
+      hint();
+      if (!E('expansion').value) setTimeout(() => E('expansion').focus(), 50); else E('qty').focus();
+    });
+    autocomplete(E('expansion'), async (q, cb) => {
+      const f2 = fold(q), g = curGame(), out = [];
+      if (st.sets) st.sets.filter(s => !f2 || fold(`${s.expansion} ${s.rarity} ${s.code}`).includes(f2)).slice(0, 40)
+        .forEach(s => out.push({label: s.expansion, sub: `${s.rarity || '—'}${s.code ? ' · ' + s.code : ''}`, set: s, group: 'Stampe di questa carta'}));
+      const exps = [...new Set([...S.cards.values()].filter(c => c.game === g).map(c => c.expansion))].filter(e => e && (!f2 || fold(e).includes(f2))).sort().slice(0, 10);
+      exps.forEach(e => out.push({label: e, value: e, group: 'Espansioni del tuo archivio'}));
+      cb(out);
+    }, it => {
+      if (it.set){ E('expansion').value = it.set.expansion; E('rarity').value = it.set.rarity || E('rarity').value; if (it.set.image) st.image = it.set.image; }
+      else E('expansion').value = it.value;
+      hint(); E('rarity').focus();
+    });
+    const setType = v => { $$('#ptype button', m).forEach(b => b.classList.toggle('on', b.dataset.v === v)); $('#p-single', m).hidden = v !== 'single'; $('#p-lot', m).hidden = v !== 'lot'; };
+    $$('#ptype button', m).forEach(b => b.onclick = () => setType(b.dataset.v));
+    const lotSel = () => { $('#newlot', m).hidden = E('lot').value !== '__new'; };
+    E('lot').onchange = lotSel; lotSel();
+    let againFlag = false;
+    $$('button[type=submit]', m).forEach(b => b.addEventListener('click', () => { againFlag = b.name === 'again'; }));
+    f.onsubmit = async e => {
+      e.preventDefault();
+      const name = clean(E('name').value); if (!name) return;
+      const isLot = $('#ptype button.on', m).dataset.v === 'lot';
+      const d = {game: curGame(), name, expansion: clean(E('expansion').value), rarity: clean(E('rarity').value), image_url: st.image};
+      const qty = Math.max(1, parseInt(E('qty').value) || 1);
+      let lotId = isLot ? E('lot').value : null;
+      if (isLot && lotId === '__new' && !clean(E('lot_desc').value)){ toast('Scrivi una descrizione per il nuovo lotto', 'err'); E('lot_desc').focus(); return; }
+      const price = num(E('buy_price').value);
+      const ok = await commit(`Aggiunta ${qty}× ${name}`, async tx => {
+        const cid = await ensureCard(tx, d);
+        if (lotId === '__new'){ lotId = uid(); await tx.insert('lots', {id: lotId, description: clean(E('lot_desc').value), buy_date: E('lot_date').value || null, total_price: num(E('lot_price').value) || 0}); }
+        await addCopy(tx, {card_id: cid, lot_id: lotId || null, qty, condition: E('condition').value, edition: clean(E('edition').value) || null, language: E('language').value || null,
+          buy_date: E('buy_date').value || null, buy_price: isLot ? null : price, notes: clean(E('notes').value) || null});
+        d.id = cid;
+      });
+      if (!ok) return;
+      queueImages([d.id]);
+      if (againFlag){ addCardForm({game: d.game, exp: d.expansion, lot: lotId || undefined, lang: E('language').value}); }
+      else { closeModal(); if (!base) location.hash = '#/c/' + d.id; }
+    };
+  }});
+}
+
+/* ===== modifica carta (con unione automatica) ===== */
+function editCardForm(id){
+  const c = S.cards.get(id);
+  openModal('Modifica carta', `<form id="ecf"><div class="fg">
+    <div><label class="f">Gioco</label><input class="inp" name="game" list="dl-games" value="${esc(c.game)}" required></div>
+    <div class="full"><label class="f">Nome carta</label><input class="inp" name="name" value="${esc(c.name)}" required></div>
+    <div class="full"><label class="f">Espansione</label><input class="inp" name="expansion" list="dl-exp" value="${esc(c.expansion)}"></div>
+    <div><label class="f">Rarità</label><input class="inp" name="rarity" list="dl-rar2" value="${esc(c.rarity)}"></div>
+    <div class="full"><label class="f">URL immagine (facoltativo)</label><input class="inp" name="image_url" value="${esc(c.image_url || '')}" placeholder="https://…"></div>
+  </div><div class="note" style="margin-top:12px">Se nome, espansione e rarità coincidono con un'altra carta del tuo archivio, le copie verranno unite in quella riga.</div>
+  <div class="mfoot"><button type="button" class="btn" data-c>Annulla</button><button class="btn pri">Salva</button></div>
+  ${dl('dl-games', IX.games)}${dl('dl-exp', [...S.cards.values()].filter(x => x.game === c.game).map(x => x.expansion))}${dl('dl-rar2', [...(RARITIES[c.game] || []), ...[...S.cards.values()].map(x => x.rarity)])}</form>`,
+  {onMount: m => {
+    $('[data-c]', m).onclick = closeModal;
+    $('#ecf', m).onsubmit = async e => {
+      e.preventDefault(); const E = n => e.target.elements[n];
+      const d = {game: gameName(E('game').value), name: clean(E('name').value), expansion: clean(E('expansion').value), rarity: clean(E('rarity').value), image_url: clean(E('image_url').value) || null};
+      const target = [...S.cards.values()].find(x => x.id !== id && keyOf(x) === keyOf(d));
+      let dest = id;
+      const ok = await commit(target ? `Unita a ${target.name}` : `Modificata ${d.name}`, async tx => {
+        if (target){
+          await tx.update('copies', copiesOf(id).map(x => x.id), {card_id: target.id});
+          if (d.image_url && !target.image_url) await tx.update('cards', target.id, {image_url: d.image_url});
+          await tx.remove('cards', id); dest = target.id;
+          // unisci copie disponibili identiche
+          const cps = [...S.copies.values()].filter(x => x.card_id === target.id && x.status !== 'venduto');
+          const done = new Set();
+          for (const a of cps){ if (done.has(a.id)) continue; const twins = cps.filter(b => b.id !== a.id && !done.has(b.id) && sameAvail(a, b));
+            if (twins.length){ await tx.update('copies', a.id, {qty: a.qty + sum(twins, t => t.qty)}); await tx.remove('copies', twins.map(t => t.id)); twins.forEach(t => done.add(t.id)); } done.add(a.id); }
+        } else await tx.update('cards', id, d);
+      });
+      if (ok){ closeModal(); location.hash = '#/c/' + dest; }
+    };
+  }});
+}
+
+/* ===== modifica copia ===== */
+function editCopyForm(id){
+  const x = S.copies.get(id), c = S.cards.get(x.card_id);
+  openModal(`Modifica copia · ${c.name}`, `<form id="ecp"><div class="fg">
+    <div><label class="f">Quantità</label><input class="inp" name="qty" type="number" min="1" value="${x.qty}"></div>
+    <div><label class="f">Condizione</label><select class="inp" name="condition">${CONDS.map(k => opt(k, x.condition, `${k} – ${COND_LBL[k]}`)).join('')}${x.condition && !CONDS.includes(x.condition) ? opt(x.condition, x.condition) : ''}</select></div>
+    <div><label class="f">Lingua</label><select class="inp" name="language">${opt('', x.language, '—')}${LANGS.map(l => opt(l, x.language)).join('')}${x.language && !LANGS.includes(x.language) ? opt(x.language, x.language) : ''}</select></div>
+    <div><label class="f">Edizione</label><input class="inp" name="edition" list="dl-ed" value="${esc(x.edition || '')}"></div>
+    <div><label class="f">Data acquisto</label><input class="inp" name="buy_date" type="date" value="${x.buy_date || ''}"></div>
+    <div><label class="f">Lotto</label><select class="inp" name="lot">${opt('', x.lot_id, '— nessuno (singola)')}${lotOptions(x.lot_id)}</select></div>
+    <div><label class="f">Prezzo unitario (€)</label><input class="inp" name="buy_price" inputmode="decimal" value="${x.buy_price ?? ''}"></div>
+    <div><label class="f">Stato</label><select class="inp" name="status">${opt('disponibile', x.status, 'Disponibile')}${opt('venduto', x.status, 'Venduta')}</select></div>
+    <div class="sellf"><label class="f">Data vendita</label><input class="inp" name="sell_date" type="date" value="${x.sell_date || ''}"></div>
+    <div class="sellf"><label class="f">Incasso totale (€)</label><input class="inp" name="sell_price" inputmode="decimal" value="${x.sell_price ?? ''}"></div>
+    <div class="sellf"><label class="f">Piattaforma</label><input class="inp" name="platform" list="dl-pl" value="${esc(x.platform || '')}"></div>
+    <div class="full"><label class="f">Note</label><input class="inp" name="notes" value="${esc(x.notes || '')}"></div>
+  </div><div class="mfoot"><button type="button" class="btn" data-c>Annulla</button><button class="btn pri">Salva</button></div>${dl('dl-ed', EDITIONS)}${dl('dl-pl', PLATFORMS)}</form>`,
+  {wide: true, onMount: m => {
+    const f = $('#ecp', m), E = n => f.elements[n];
+    $('[data-c]', m).onclick = closeModal;
+    const tog = () => $$('.sellf', m).forEach(el => el.style.display = E('status').value === 'venduto' ? '' : 'none');
+    E('status').onchange = tog; tog();
+    f.onsubmit = async e => {
+      e.preventDefault();
+      const sold = E('status').value === 'venduto';
+      const patch = {qty: Math.max(1, parseInt(E('qty').value) || 1), condition: E('condition').value, language: E('language').value || null, edition: clean(E('edition').value) || null,
+        buy_date: E('buy_date').value || null, lot_id: E('lot').value || null, buy_price: E('lot').value ? null : num(E('buy_price').value), status: sold ? 'venduto' : 'disponibile',
+        sell_date: sold ? (E('sell_date').value || today()) : null, sell_price: sold ? num(E('sell_price').value) : null, platform: sold ? (clean(E('platform').value) || null) : null, notes: clean(E('notes').value) || null};
+      const ok = await commit(`Modificata copia di ${c.name}`, async tx => {
+        await tx.update('copies', id, patch);
+        const me = S.copies.get(id);
+        const twin = [...S.copies.values()].find(o => o.id !== id && sameAvail(o, me) && (o.notes || '') === (me.notes || ''));
+        if (twin && me.status !== 'venduto'){ await tx.update('copies', twin.id, {qty: twin.qty + me.qty}); await tx.remove('copies', id); }
+      });
+      if (ok) closeModal();
+    };
+  }});
+}
+
+/* ===== vendita ===== */
+function sellForm(id){
+  const x = S.copies.get(id), c = S.cards.get(x.card_id), st = cardStats(c.id);
+  openModal(`Vendi · ${c.name}`, `<form id="sf">
+    <div class="muted small" style="margin-bottom:10px">${esc(c.expansion)} · ${esc(c.rarity)} · ${condB(x.condition)} · disponibili ${x.qty} · ${x.lot_id ? 'da lotto' : 'pagata ' + eur(x.buy_price) + ' cad.'}</div>
+    <div class="fg">
+      <div><label class="f">Copie vendute</label><input class="inp" name="qty" type="number" min="1" max="${x.qty}" value="1"></div>
+      <div><label class="f">Incasso totale (€)</label><input class="inp" name="price" inputmode="decimal" placeholder="${st.avgSell ? String(round2(st.avgSell)).replace('.', ',') : '0,00'}" autofocus></div>
+      <div><label class="f">Data vendita</label><input class="inp" name="date" type="date" value="${today()}"></div>
+      <div><label class="f">Piattaforma</label><input class="inp" name="platform" list="dl-pl" value="${esc(localStorage.getItem('cardarchive.lastPlatform') || 'Cardmarket')}"></div>
+    </div>
+    <div id="sprev" class="note" style="margin-top:12px"></div>
+    <div class="mfoot"><button type="button" class="btn" data-c>Annulla</button><button class="btn ok">Registra vendita</button></div>${dl('dl-pl', PLATFORMS)}</form>`,
+  {onMount: m => {
+    const f = $('#sf', m), E = n => f.elements[n];
+    $('[data-c]', m).onclick = closeModal;
+    const prev = () => { const q = Math.min(x.qty, Math.max(1, parseInt(E('qty').value) || 1)), p = num(E('price').value);
+      $('#sprev', m).innerHTML = p == null ? 'Inserisci l\'incasso totale per queste copie.' : `${eur(p / q)} a copia` + (x.lot_id ? ' · il guadagno viene conteggiato sul lotto' : x.buy_price != null ? ` · margine ${signEur(p - x.buy_price * q)}` : ''); };
+    f.addEventListener('input', prev); prev();
+    f.onsubmit = async e => {
+      e.preventDefault();
+      const q = Math.min(x.qty, Math.max(1, parseInt(E('qty').value) || 1)), p = num(E('price').value);
+      if (p == null){ toast('Inserisci il prezzo di vendita', 'err'); return; }
+      localStorage.setItem('cardarchive.lastPlatform', clean(E('platform').value));
+      const sale = {status: 'venduto', sell_date: E('date').value || today(), sell_price: round2(p), platform: clean(E('platform').value) || null};
+      const ok = await commit(`Venduta ${q}× ${c.name} a ${eur(p)}`, async tx => {
+        if (q === x.qty) await tx.update('copies', id, sale);
+        else { await tx.update('copies', id, {qty: x.qty - q}); const {id: _, created_at, user_id, ...rest} = x; await tx.insert('copies', {...rest, id: uid(), qty: q, ...sale}); }
+      });
+      if (ok) closeModal();
+    };
+  }});
+}
+
+/* ===================== LOTTI ===================== */
+function lotStats(l){
+  const cs = lotCopies(l.id); const so = cs.filter(c => c.status === 'venduto');
+  const earned = sum(so, c => c.sell_price);
+  return {copies: sum(cs, c => c.qty), sold: sum(so, c => c.qty), left: sum(cs.filter(c => c.status !== 'venduto'), c => c.qty), earned, profit: earned - l.total_price};
+}
+function pageLots(app){
+  const lots = [...S.lots.values()].sort((a, b) => (b.buy_date || '').localeCompare(a.buy_date || '')).map(l => ({l, s: lotStats(l)}));
+  const tc = sum(lots, x => x.l.total_price), te = sum(lots, x => x.s.earned);
+  app.innerHTML = `
+    <div class="crumbs"><a href="#/">Home</a> › <b>Lotti</b></div>
+    <div class="pagehead"><div class="grow"><h1>Lotti</h1><div class="muted">Il costo di un lotto è condiviso: guadagno = incassato dalle vendite − prezzo pagato.</div></div><button class="btn pri" data-act="addLot">＋ Nuovo lotto</button></div>
+    <div class="stats"><div class="stat"><div class="l">Lotti</div><div class="v">${lots.length}</div></div><div class="stat"><div class="l">Pagato</div><div class="v">${eur(tc)}</div></div>
+      <div class="stat"><div class="l">Incassato</div><div class="v">${eur(te)}</div></div><div class="stat"><div class="l">Guadagno lotti</div><div class="v">${signEur(te - tc)}</div></div></div>
+    <div class="panel flush">${lots.length ? `<div class="tw"><table class="t"><thead><tr><th>Data</th><th>Descrizione</th><th class="right">Prezzo</th><th class="right hide-m">Carte</th><th class="right hide-m">Rimaste</th><th class="right">Incassato</th><th class="right">Guadagno</th><th></th></tr></thead><tbody>
+      ${lots.map(({l, s}) => `<tr><td class="nowrap">${fdate(l.buy_date)}</td><td><a class="cname" href="#/lotto/${l.id}">${esc(l.description)}</a></td><td class="right">${eur(l.total_price)}</td>
+        <td class="right hide-m">${s.copies}</td><td class="right hide-m">${s.left}</td><td class="right">${eur(s.earned)}</td><td class="right">${signEur(s.profit)}</td>
+        <td class="acts"><button class="btn sm" data-act="editLot" data-id="${l.id}">✎</button></td></tr>`).join('')}
+    </tbody></table></div>` : `<div class="empty">Nessun lotto. Creane uno qui o scegli “Da un lotto” quando aggiungi una carta.</div>`}</div>`;
+}
+function pageLot(app, id){
+  const l = S.lots.get(id);
+  if (!l){ app.innerHTML = `<div class="panel empty">Lotto non trovato. <a href="#/lotti">Torna ai lotti</a></div>`; return; }
+  const s = lotStats(l);
+  const cs = lotCopies(id).map(x => ({x, c: S.cards.get(x.card_id)})).filter(r => r.c).sort((a, b) => a.c.name.localeCompare(b.c.name, 'it'));
+  app.innerHTML = `
+    <div class="crumbs"><a href="#/">Home</a> › <a href="#/lotti">Lotti</a> › <b>${esc(l.description)}</b></div>
+    <div class="pagehead"><div class="grow"><h1>${esc(l.description)}</h1><div class="muted">Acquistato il ${fdate(l.buy_date)}</div></div>
+      <button class="btn" data-act="editLot" data-id="${l.id}">✎ Modifica</button><button class="btn dan" data-act="delLot" data-id="${l.id}">Elimina</button>
+      <button class="btn pri" data-act="addCard" data-lot="${l.id}">＋ Aggiungi carta al lotto</button></div>
+    <div class="stats"><div class="stat"><div class="l">Pagato</div><div class="v">${eur(l.total_price)}</div></div>
+      <div class="stat"><div class="l">Carte</div><div class="v">${s.copies}</div><div class="s">${s.left} ancora disponibili</div></div>
+      <div class="stat"><div class="l">Incassato</div><div class="v">${eur(s.earned)}</div><div class="s">${s.sold} vendute</div></div>
+      <div class="stat"><div class="l">Guadagno</div><div class="v">${signEur(s.profit)}</div><div class="s">${s.profit < 0 ? 'mancano ' + eur(-s.profit) + ' per rientrare' : 'lotto già ripagato'}</div></div></div>
+    <div class="panel flush">${cs.length ? `<div class="tw"><table class="t"><thead><tr><th>Carta</th><th class="hide-m">Espansione</th><th>Rarità</th><th>Q.tà</th><th></th><th>Stato</th><th class="right">Incasso</th><th></th></tr></thead><tbody>
+      ${cs.map(({x, c}) => `<tr><td><a class="cname" href="#/c/${c.id}">${esc(c.name)}</a></td><td class="hide-m muted">${esc(c.expansion)}</td><td>${c.rarity ? `<span class="b rar">${esc(c.rarity)}</span>` : ''}</td><td>${x.qty}</td><td>${condB(x.condition)}</td>
+        <td>${x.status === 'venduto' ? `<span class="b st-v">Venduta ${fdate(x.sell_date)}</span>` : '<span class="b st-d">Disponibile</span>'}</td><td class="right">${x.status === 'venduto' ? eur(x.sell_price) : ''}</td>
+        <td class="acts">${x.status !== 'venduto' ? `<button class="btn sm ok" data-act="sell" data-id="${x.id}">Vendi</button> ` : ''}<button class="btn sm" data-act="editCopy" data-id="${x.id}">✎</button></td></tr>`).join('')}
+    </tbody></table></div>` : `<div class="empty">Nessuna carta in questo lotto.</div>`}</div>`;
+}
+function lotForm(id){
+  const l = id ? S.lots.get(id) : null;
+  openModal(l ? 'Modifica lotto' : 'Nuovo lotto', `<form id="lf"><div class="fg">
+    <div class="full"><label class="f">Descrizione</label><input class="inp" name="d" required value="${esc(l?.description || '')}" placeholder="es. 20 carte Yu-Gi-Oh! da mercatino"></div>
+    <div><label class="f">Data</label><input class="inp" type="date" name="dt" value="${l?.buy_date || today()}"></div>
+    <div><label class="f">Prezzo totale (€)</label><input class="inp" name="p" inputmode="decimal" value="${l ? String(l.total_price).replace('.', ',') : ''}" placeholder="0,00"></div>
+  </div><div class="mfoot"><button type="button" class="btn" data-c>Annulla</button><button class="btn pri">Salva</button></div></form>`, {onMount: m => {
+    $('[data-c]', m).onclick = closeModal;
+    $('#lf', m).onsubmit = async e => {
+      e.preventDefault(); const E = n => e.target.elements[n];
+      const d = {description: clean(E('d').value), buy_date: E('dt').value || null, total_price: num(E('p').value) || 0};
+      let nid = id;
+      const ok = await commit(l ? 'Lotto modificato' : 'Lotto creato', async tx => { if (l) await tx.update('lots', id, d); else { nid = uid(); await tx.insert('lots', {id: nid, ...d}); } });
+      if (ok){ closeModal(); location.hash = '#/lotto/' + nid; }
+    };
+  }});
+}
+
+/* ===================== GUADAGNI MENSILI ===================== */
+let EG = '';
+function monthly(game){
+  const M = new Map(); const get = m => M.get(m) || M.set(m, {m, spent: 0, bought: 0, earned: 0, sold: 0, margin: 0}).get(m);
+  const okCard = id => !game || S.cards.get(id)?.game === game;
+  for (const c of S.copies.values()){
+    if (!okCard(c.card_id)) continue;
+    if (c.buy_date && !c.lot_id){ const r = get(c.buy_date.slice(0, 7)); r.spent += (c.buy_price || 0) * c.qty; r.bought += c.qty; }
+    if (c.status === 'venduto' && c.sell_date){ const r = get(c.sell_date.slice(0, 7)); r.earned += c.sell_price || 0; r.sold += c.qty; if (!c.lot_id && c.buy_price != null) r.margin += (c.sell_price || 0) - c.buy_price * c.qty; }
+  }
+  for (const l of S.lots.values()){
+    if (game && !lotCopies(l.id).some(c => okCard(c.card_id))) continue;
+    if (l.buy_date){ const r = get(l.buy_date.slice(0, 7)); r.spent += l.total_price; r.bought += sum(lotCopies(l.id), c => c.qty); }
+  }
+  return [...M.values()].sort((a, b) => b.m.localeCompare(a.m));
+}
+function barChart(rows){
+  rows = [...rows].reverse().slice(-12);
+  if (!rows.length) return '';
+  const W = 760, H = 230, P = {l: 56, r: 10, t: 12, b: 34};
+  const mx = Math.max(...rows.flatMap(r => [r.spent, r.earned])) * 1.1 || 1;
+  const bw = (W - P.l - P.r) / rows.length, sy = v => H - P.b - v / mx * (H - P.t - P.b);
+  let g = '';
+  for (let i = 0; i <= 4; i++){ const v = mx * i / 4, y = sy(v); g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y}" y2="${y}" stroke="#e8ecf2"/><text x="${P.l - 6}" y="${y + 4}" text-anchor="end" font-size="11" fill="#6b7686">${EUR.format(v).replace(/,\d\d/, '')}</text>`; }
+  rows.forEach((r, i) => {
+    const x = P.l + i * bw, w = Math.min(22, bw * .34);
+    g += `<rect x="${x + bw / 2 - w - 1}" y="${sy(r.spent)}" width="${w}" height="${H - P.b - sy(r.spent)}" rx="3" fill="#e0726b"><title>${fmonth(r.m)} · speso ${EUR.format(r.spent)}</title></rect>`;
+    g += `<rect x="${x + bw / 2 + 1}" y="${sy(r.earned)}" width="${w}" height="${H - P.b - sy(r.earned)}" rx="3" fill="#2fa36b"><title>${fmonth(r.m)} · incassato ${EUR.format(r.earned)}</title></rect>`;
+    const [y, mm] = r.m.split('-');
+    g += `<text x="${x + bw / 2}" y="${H - 18}" text-anchor="middle" font-size="11" fill="#6b7686">${MESI[+mm - 1].slice(0, 3)}</text><text x="${x + bw / 2}" y="${H - 5}" text-anchor="middle" font-size="10" fill="#9aa3b1">${y}</text>`;
+  });
+  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}">${g}</svg><div class="legend"><span><i style="background:#e0726b"></i>Speso</span><span><i style="background:#2fa36b"></i>Incassato</span></div></div>`;
+}
+function pageEarnings(app){
+  const rows = monthly(EG);
+  const T = {spent: sum(rows, r => r.spent), earned: sum(rows, r => r.earned), sold: sum(rows, r => r.sold), bought: sum(rows, r => r.bought), margin: sum(rows, r => r.margin)};
+  app.innerHTML = `
+    <div class="crumbs"><a href="#/">Home</a> › <b>Guadagni mensili</b></div>
+    <div class="pagehead"><div class="grow"><h1>Guadagni mensili</h1><div class="muted">Spese (singole + lotti) per mese d'acquisto, incassi per mese di vendita.</div></div>
+      <select class="inp" id="eg" style="width:auto">${opt('', EG, 'Tutti i giochi')}${IX.games.map(g => opt(g, EG)).join('')}</select></div>
+    <div class="stats"><div class="stat"><div class="l">Speso</div><div class="v">${eur(T.spent)}</div></div><div class="stat"><div class="l">Incassato</div><div class="v">${eur(T.earned)}</div></div>
+      <div class="stat"><div class="l">Saldo</div><div class="v">${signEur(T.earned - T.spent)}</div></div><div class="stat"><div class="l">Margine vendite singole</div><div class="v">${signEur(T.margin)}</div><div class="s">esclusi i lotti</div></div></div>
+    ${rows.length ? `<div class="panel"><h2>Ultimi 12 mesi</h2>${barChart(rows)}</div>` : ''}
+    <div class="panel flush">${rows.length ? `<div class="tw"><table class="t"><thead><tr><th>Mese</th><th class="right hide-m">Copie acquistate</th><th class="right">Speso</th><th class="right hide-m">Copie vendute</th><th class="right">Incassato</th><th class="right">Saldo</th><th class="right hide-m">Margine singole</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td class="nowrap"><b>${fmonth(r.m)}</b></td><td class="right hide-m">${r.bought}</td><td class="right">${eur(r.spent)}</td><td class="right hide-m">${r.sold}</td><td class="right">${eur(r.earned)}</td><td class="right">${signEur(r.earned - r.spent)}</td><td class="right hide-m">${signEur(r.margin)}</td></tr>`).join('')}
+    </tbody><tfoot><tr><td>Totale</td><td class="right hide-m">${T.bought}</td><td class="right">${eur(T.spent)}</td><td class="right hide-m">${T.sold}</td><td class="right">${eur(T.earned)}</td><td class="right">${signEur(T.earned - T.spent)}</td><td class="right hide-m">${signEur(T.margin)}</td></tr></tfoot></table></div>` : `<div class="empty">Nessun movimento con data.</div>`}</div>`;
+  $('#eg').onchange = e => { EG = e.target.value; render(); };
+}
+
+/* ===================== IMPORT / EXPORT ===================== */
+const ALIASES = {
+  name: ['nome carta', 'nome', 'carta', 'item name', 'card name', 'name', 'product name', 'prodotto', 'product'],
+  game: ['gioco', 'game'],
+  expansion: ['set/espansione', 'set / espansione', 'espansione', 'set name', 'expansion', 'set', 'espansione/set'],
+  edition: ['edizione', 'edition', 'printing'],
+  rarity: ['rarita', 'rarity'],
+  condition: ['condizione', 'condition', 'stato carta'],
+  language: ['lingua', 'language'],
+  qty: ['quantita', 'qty', 'quantity', 'q.ta', 'copie', 'amount'],
+  lotId: ['id lotto', 'lotto', 'lot id', 'lot'],
+  buyDate: ['data acquisto', 'purchase date', 'order date', 'data ordine', 'paid at', 'created at', 'data', 'date'],
+  buyUnit: ['prezzo acquisto unitario', 'prezzo unitario', 'unit price', 'prezzo acquisto', 'price'],
+  buyTotal: ['prezzo acquisto totale', 'totale acquisto', 'costo totale acquisto'],
+  cents: ['price in eur cents', 'price cents'],
+  status: ['stato', 'status'],
+  sellDate: ['data vendita', 'sale date', 'sold date'],
+  sellTotal: ['prezzo vendita totale', 'prezzo vendita', 'incasso', 'sale price', 'sold price'],
+  platform: ['piattaforma', 'platform'],
+  notes: ['note', 'notes'],
+  desc: ['descrizione', 'description', 'descrizione lotto'],
+  lotTotal: ['prezzo totale', 'costo totale', 'prezzo lotto', 'costo lotto', 'totale', 'costo', 'prezzo'],
+  foil: ['foil'], fname: ['first edition', '1st edition']
+};
+const hnorm = h => fold(h).replace(/\(.*?\)|€/g, '').replace(/[^a-z0-9/. ]/g, ' ').replace(/\s+/g, ' ').trim();
+function mapHeaders(headers, fields){
+  const H = headers.map(hnorm), map = {}, used = new Set();
+  for (const pass of [0, 1]) for (const f of fields){
+    if (map[f] != null) continue;
+    for (const a of ALIASES[f]){
+      const i = H.findIndex((h, j) => !used.has(j) && h && (pass === 0 ? h === a : (a.length > 4 && h.startsWith(a + ' '))));
+      if (i >= 0){ map[f] = i; used.add(i); break; }
+    }
+  }
+  return map;
+}
+function parseDate(v){
+  if (v == null || v === '') return null;
+  if (typeof v === 'number' && window.XLSX){ const d = XLSX.SSF.parse_date_code(v); return d ? `${d.y}-${pad(d.m)}-${pad(d.d)}` : null; }
+  if (v instanceof Date) return isoLocal(v);
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (m) return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+  m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/); if (m){ const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${pad(m[2])}-${pad(m[1])}`; }
+  const t = Date.parse(s); return isNaN(t) ? null : isoLocal(new Date(t));
+}
+function parseCSV(text){
+  text = text.replace(/^﻿/, '');
+  const first = text.split(/\r?\n/)[0] || '';
+  const delim = [';', ',', '\t'].map(d => [d, first.split(d).length]).sort((a, b) => b[1] - a[1])[0][0];
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++){
+    const ch = text[i];
+    if (q){ if (ch === '"'){ if (text[i + 1] === '"'){ cur += '"'; i++; } else q = false; } else cur += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === delim){ row.push(cur); cur = ''; }
+    else if (ch === '\n' || ch === '\r'){ if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; }
+    else cur += ch;
+  }
+  if (cur !== '' || row.length){ row.push(cur); rows.push(row); }
+  return rows.filter(r => r.some(c => String(c).trim() !== ''));
+}
+function findHeaderRow(aoa){
+  for (let i = 0; i < Math.min(aoa.length, 15); i++){ const H = (aoa[i] || []).map(hnorm); if (H.some(h => ALIASES.name.includes(h) || ALIASES.desc.includes(h))) return i; }
+  return -1;
+}
+/** Converte un file in una "proposta d'import": {cards, lots, copies, info} */
+function buildImport(sheets, defaults){
+  // sheets: [{name, aoa}]
+  const lotsById = new Map(), rowsOut = [], info = {format: 'Generico', skipped: [], sheets: []};
+  const lotSheets = [], cardSheets = [];
+  for (const sh of sheets){
+    if (/riepilog|summary|dashboard|statistic|grafic/i.test(sh.name)){ info.skipped.push(sh.name); continue; }
+    const hr = findHeaderRow(sh.aoa); if (hr < 0){ info.skipped.push(sh.name); continue; }
+    const headers = sh.aoa[hr].map(x => String(x ?? ''));
+    const map = mapHeaders(headers, Object.keys(ALIASES));
+    const body = sh.aoa.slice(hr + 1);
+    if ((map.name == null || /lott/i.test(sh.name)) && (map.desc != null || map.name != null) && (map.name == null || /lott/i.test(sh.name))){ if (map.desc == null){ map.desc = map.name; delete map.name; } lotSheets.push({sh, map, body}); } else if (false) lotSheets.push({sh, map, body}); else if (map.name != null) cardSheets.push({sh, map, body});
+    if (map.cents != null) info.format = 'Ordine CardTrader';
+  }
+  for (const {map, body} of lotSheets){
+    for (const r of body){
+      const g = k => map[k] != null ? r[map[k]] : null;
+      const lid = clean(g('lotId') ?? ''); const d = clean(g('desc') ?? '');
+      if (!lid && !d) continue;
+      const tot = num(g('lotTotal')) ?? num(g('buyTotal')) ?? num(g('buyUnit')) ?? 0;
+      lotsById.set(norm(lid || d), {id: uid(), description: d || ('Lotto ' + lid), buy_date: parseDate(g('buyDate')), total_price: round2(tot), _ref: lid});
+    }
+  }
+  const lotAgg = new Map();
+  for (const {sh, map, body} of cardSheets){
+    info.sheets.push(sh.name);
+    const sheetGame = gameName(sh.name);
+    const sheetGameOk = /yu.?gi|pok|one.?piece|magic|lorcana/i.test(fold(sh.name));
+    for (const r of body){
+      const g = k => map[k] != null ? r[map[k]] : null;
+      const name = clean(g('name') ?? ''); if (!name) continue;
+      const game = gameName(g('game')) || (sheetGameOk ? sheetGame : '') || defaults.game;
+      const qty = Math.max(1, parseInt(num(g('qty'))) || 1);
+      const lotRef = clean(g('lotId') ?? '');
+      let unit = num(g('buyUnit'));
+      if (unit == null && num(g('buyTotal')) != null) unit = num(g('buyTotal')) / qty;
+      if (unit == null && num(g('cents')) != null) unit = num(g('cents')) / 100;
+      const sold = /vend|sold|venduto/i.test(String(g('status') ?? '')) || (num(g('sellTotal')) != null && map.status == null);
+      let edition = clean(g('edition') ?? '') || null;
+      if (map.fname != null && /^(true|1|yes|si|sì|x)$/i.test(String(g('fname')))) edition = edition || '1st Edition';
+      let notes = clean(g('notes') ?? '') || null;
+      if (map.foil != null && /^(true|1|yes|si|sì|x)$/i.test(String(g('foil')))) notes = notes ? notes + ' · Foil' : 'Foil';
+      const row = {game, name, expansion: clean(g('expansion') ?? ''), rarity: clean(g('rarity') ?? ''),
+        qty, condition: normCond(g('condition')), edition, language: clean(g('language') ?? '').toUpperCase().slice(0, 12) || null,
+        buy_date: parseDate(g('buyDate')) || defaults.date || null, buy_price: lotRef ? null : (unit == null ? null : round2(unit)),
+        status: sold ? 'venduto' : 'disponibile', sell_date: sold ? (parseDate(g('sellDate')) || null) : null, sell_price: sold ? num(g('sellTotal')) : null,
+        platform: clean(g('platform') ?? '') || (sold ? null : null), notes, lotRef: lotRef || null};
+      if (lotRef){
+        const k = norm(lotRef); const a = lotAgg.get(k) || {sum: 0, date: null}; a.sum += num(g('buyTotal')) || 0; a.date = a.date || row.buy_date; lotAgg.set(k, a);
+      }
+      rowsOut.push(row);
+    }
+  }
+  if (info.format === 'Generico' && lotSheets.length + cardSheets.length && cardSheets.some(c => c.map.lotId != null)) info.format = 'Tracker Excel (con lotti)';
+  for (const [k, a] of lotAgg) if (!lotsById.has(k)) lotsById.set(k, {id: uid(), description: 'Lotto ' + k.toUpperCase(), buy_date: a.date, total_price: round2(a.sum), _ref: k, _guessed: true});
+  // unisci copie identiche disponibili
+  const merged = [];
+  const mk = r => [r.game, r.expansion, r.name, r.rarity].map(norm).join('|') + '#' + [r.lotRef, r.condition, r.edition, r.language, r.buy_price, r.buy_date, r.notes].join('|');
+  const mm = new Map();
+  for (const r of rowsOut){
+    if (r.status === 'disponibile'){ const k = mk(r); const ex = mm.get(k); if (ex){ ex.qty += r.qty; continue; } mm.set(k, r); }
+    merged.push(r);
+  }
+  info.rawRows = rowsOut.length;
+  return {rows: merged, lots: [...lotsById.values()], info};
+}
+async function readFileToSheets(file){
+  const nm = file.name.toLowerCase();
+  if (nm.endsWith('.csv') || nm.endsWith('.txt')) return [{name: file.name.replace(/\.\w+$/, ''), aoa: parseCSV(await file.text())}];
+  if (!window.XLSX) throw new Error('Libreria Excel non caricata (controlla la connessione)');
+  const wb = XLSX.read(await file.arrayBuffer(), {type: 'array'});
+  return wb.SheetNames.map(n => ({name: n, aoa: XLSX.utils.sheet_to_json(wb.Sheets[n], {header: 1, raw: true, defval: ''})}));
+}
+async function runImport(plan){
+  const {rows, lots} = plan;
+  return commit(`Importate ${sum(rows, r => r.qty)} copie`, async tx => {
+    const lotMap = new Map();
+    const newLots = [];
+    for (const l of lots){
+      const exist = [...S.lots.values()].find(x => norm(x.description) === norm(l.description) && (x.buy_date || '') === (l.buy_date || ''));
+      if (exist) lotMap.set(norm(l._ref || l.description), exist.id);
+      else { lotMap.set(norm(l._ref || l.description), l.id); newLots.push({id: l.id, description: l.description, buy_date: l.buy_date, total_price: l.total_price}); }
+    }
+    await tx.insert('lots', newLots);
+    const byKey = new Map([...S.cards.values()].map(c => [keyOf(c), c.id]));
+    // senza rarità (es. export CardTrader): se esiste una sola versione della carta in quell'espansione, usa quella
+    const pool = [...S.cards.values()].map(c => ({game: c.game, expansion: c.expansion, name: c.name, rarity: c.rarity})).concat(rows.filter(r => r.rarity));
+    for (const r of rows) if (!r.rarity){
+      const vars = [...new Set(pool.filter(c => norm(c.game) === norm(r.game) && norm(c.expansion) === norm(r.expansion) && norm(c.name) === norm(r.name) && c.rarity).map(c => c.rarity))];
+      if (vars.length === 1) r.rarity = vars[0];
+    }
+    const newCards = [];
+    for (const r of rows){ const k = keyOf(r); if (!byKey.has(k)){ const id = uid(); byKey.set(k, id); newCards.push({id, game: r.game, expansion: r.expansion, name: r.name, rarity: r.rarity, image_url: null}); } }
+    await tx.insert('cards', newCards);
+    const newCopies = [], bumps = new Map();
+    const avail = [...S.copies.values()].filter(c => c.status !== 'venduto');
+    for (const r of rows){
+      const cp = {card_id: byKey.get(keyOf(r)), lot_id: r.lotRef ? (lotMap.get(norm(r.lotRef)) || null) : null, qty: r.qty, condition: r.condition, edition: r.edition, language: r.language,
+        buy_date: r.buy_date, buy_price: r.buy_price, status: r.status, sell_date: r.sell_date, sell_price: r.sell_price, platform: r.platform, notes: r.notes};
+      if (cp.status === 'disponibile'){
+        const twin = avail.find(a => sameAvail(a, cp) && (a.notes || '') === (cp.notes || ''));
+        if (twin){ bumps.set(twin.id, (bumps.get(twin.id) || twin.qty) + cp.qty); continue; }
+      }
+      newCopies.push({id: uid(), ...cp});
+    }
+    await tx.insert('copies', newCopies);
+    for (const [id, q] of bumps) await tx.update('copies', id, {qty: q});
+  });
+}
+function exportJSON(){
+  const data = {app: 'CardArchive', version: 1, exported_at: new Date().toISOString(), cards: [...S.cards.values()].map(strip), lots: [...S.lots.values()].map(strip), copies: [...S.copies.values()].map(strip)};
+  download(`cardarchive-backup-${today()}.json`, JSON.stringify(data, null, 1), 'application/json');
+}
+function exportXLSX(){
+  if (!window.XLSX){ toast('Libreria Excel non caricata', 'err'); return; }
+  index();
+  const wb = XLSX.utils.book_new();
+  const lots = [...S.lots.values()].sort((a, b) => (a.buy_date || '').localeCompare(b.buy_date || ''));
+  const lotRef = new Map(lots.map((l, i) => [l.id, 'L' + String(i + 1).padStart(3, '0')]));
+  for (const g of IX.games){
+    const rows = [];
+    for (const c of [...S.cards.values()].filter(c => c.game === g).sort((a, b) => a.name.localeCompare(b.name, 'it')))
+      for (const x of copiesOf(c.id)) rows.push({'Nome Carta': c.name, 'Edizione': x.edition || '', 'Set/Espansione': c.expansion, 'Rarità': c.rarity, 'Condizione': x.condition || '', 'Lingua': x.language || '',
+        'Quantità': x.qty, 'ID Lotto': x.lot_id ? lotRef.get(x.lot_id) || '' : '', 'Data Acquisto': fdate(x.buy_date).replace('—', ''), 'Prezzo Acquisto Unitario': x.buy_price ?? '',
+        'Prezzo Acquisto Totale': x.buy_price != null ? round2(x.buy_price * x.qty) : '', 'Stato': x.status === 'venduto' ? 'Venduto' : 'Disponibile', 'Data Vendita': fdate(x.sell_date).replace('—', ''),
+        'Prezzo Vendita Totale': x.sell_price ?? '', 'Piattaforma': x.platform || '', 'Note': x.notes || ''});
+    if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), g.replace(/[\\/?*[\]:]/g, '').slice(0, 31));
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lots.map(l => ({'ID Lotto': lotRef.get(l.id), 'Descrizione': l.description, 'Data': fdate(l.buy_date).replace('—', ''), 'Prezzo Totale': l.total_price}))
+    .concat(lots.length ? [] : [{'ID Lotto': '', 'Descrizione': '', 'Data': '', 'Prezzo Totale': ''}])), 'Lotti');
+  XLSX.writeFile(wb, `cardarchive-${today()}.xlsx`);
+}
+async function importJSON(file){
+  const j = JSON.parse(await file.text());
+  if (!j.cards || !j.copies) throw new Error('File JSON non riconosciuto');
+  index();
+  return commit(`Ripristinate ${j.copies.length} righe da backup`, async tx => {
+    const remap = new Map(), newCards = [];
+    for (const c of j.cards){ const ex = IX.byKey.get(keyOf(c)); if (ex) remap.set(c.id, ex.id); else if (!S.cards.has(c.id)){ newCards.push(strip(c)); remap.set(c.id, c.id); } else remap.set(c.id, c.id); }
+    await tx.insert('cards', newCards);
+    await tx.insert('lots', (j.lots || []).filter(l => !S.lots.has(l.id)).map(strip));
+    await tx.insert('copies', j.copies.filter(c => !S.copies.has(c.id)).map(c => ({...strip(c), card_id: remap.get(c.card_id) || c.card_id})));
+  });
+}
+function pageData(app){
+  app.innerHTML = `
+    <div class="crumbs"><a href="#/">Home</a> › <b>Importa / Esporta</b></div>
+    <h1 style="margin-bottom:14px">Importa / Esporta</h1>
+    <div class="row">
+      <div class="panel" style="flex:2 1 420px">
+        <h2>Importa da Excel o CSV</h2>
+        <p class="muted" style="margin-top:-4px">Riconosce il tuo tracker (fogli per gioco + foglio “Lotti”), gli export degli ordini CardTrader e qualsiasi tabella con colonne tipo Nome, Espansione, Rarità, Quantità, Prezzo. Le carte uguali finiscono nella stessa riga.</p>
+        <label class="dz" id="dz"><input type="file" id="imf" accept=".xlsx,.xls,.xlsm,.csv,.txt" hidden><b>Scegli un file</b> o trascinalo qui<br><span class="small muted">.xlsx, .xls, .csv</span></label>
+        <div class="fg" style="margin-top:12px">
+          <div><label class="f">Gioco se non indicato</label><select class="inp" id="imgame">${IX.games.map(g => opt(g, GAMES[0])).join('')}</select></div>
+          <div><label class="f">Data acquisto se manca</label><input class="inp" type="date" id="imdate" value="${today()}"></div>
+        </div>
+        <div id="impv"></div>
+      </div>
+      <div style="flex:1 1 300px">
+        <div class="panel"><h2>Esporta</h2><p class="muted" style="margin-top:-4px">Il file Excel ha lo stesso formato del tracker e si può reimportare.</p>
+          <div class="filters"><button class="btn" data-act="exportXlsx">⬇ Excel</button><button class="btn" data-act="exportJson">⬇ Backup JSON</button></div></div>
+        <div class="panel"><h2>Immagini delle carte</h2><p class="muted small" style="margin-top:-4px">Yu-Gi-Oh! e Pokémon: l'immagine viene cercata da sola quando apri una carta. Qui puoi cercarle tutte in una volta. Per One Piece e altri giochi carica una foto dalla pagina della carta.</p>
+          <div class="filters"><button class="btn" id="imgall">🔎 Trova immagini mancanti</button><label class="small"><input type="checkbox" id="imgauto" ${localStorage.getItem('cardarchive.autoimg') === 'off' ? '' : 'checked'}> ricerca automatica</label></div><div id="imgprog" class="small muted" style="margin-top:8px"></div></div>
+        <div class="panel"><h2>Ripristina backup JSON</h2><label class="btn"><input type="file" id="jsf" accept=".json" hidden>Scegli file .json</label>
+          <div class="small muted" style="margin-top:8px">Aggiunge ciò che manca, senza duplicare.</div></div>
+        <div class="panel" style="border-color:#f0c9c9"><h2 style="color:var(--red)">Elimina tutto</h2><p class="muted small" style="margin-top:-4px">Cancella carte, copie e lotti. Prima scarico in automatico un backup JSON.</p>
+          <button class="btn dan" data-act="deleteAll">Elimina tutto l'archivio…</button></div>
+      </div>
+    </div>`;
+  const dz = $('#dz'), inp = $('#imf');
+  const handle = async file => {
+    if (!file) return;
+    try {
+      const sheets = await readFileToSheets(file);
+      const plan = buildImport(sheets, {game: $('#imgame').value, date: $('#imdate').value});
+      showPlan(plan, file.name);
+    } catch (e){ console.error(e); toast('Impossibile leggere il file: ' + e.message, 'err'); }
+  };
+  inp.onchange = () => handle(inp.files[0]);
+  ['dragover', 'dragenter'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('on'); }));
+  ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('on'); }));
+  dz.addEventListener('drop', e => handle(e.dataTransfer.files[0]));
+  $('#imgauto').onchange = e => localStorage.setItem('cardarchive.autoimg', e.target.checked ? 'on' : 'off');
+  $('#imgall').onclick = () => {
+    localStorage.setItem('cardarchive.autoimg', 'on'); $('#imgauto').checked = true;
+    imgTried.clear(); const ids = [...S.cards.values()].filter(needsImg).map(c => c.id); queueImages(ids);
+    const tot = ids.length; if (!tot){ $('#imgprog').textContent = 'Tutte le carte di Yu-Gi-Oh! e Pokémon hanno già un\'immagine.'; return; }
+    const t = setInterval(() => { const el = $('#imgprog'); if (!el){ clearInterval(t); return; }
+      const left = imgQ.length; el.textContent = left ? `Ricerca in corso: ${tot - left} di ${tot}…` : `Fatto: ${[...S.cards.values()].filter(c => IMG_GAMES.includes(c.game) && c.image_url).length} carte con immagine. Quelle non trovate puoi sistemarle a mano.`;
+      if (!left && !imgRunning) clearInterval(t); }, 700);
+  };
+  $('#jsf').onchange = async e => { try { await importJSON(e.target.files[0]); } catch (er){ toast(er.message, 'err'); } };
+}
+function showPlan(plan, fname){
+  const {rows, lots, info} = plan;
+  const byGame = {}; rows.forEach(r => { byGame[r.game] = (byGame[r.game] || 0) + r.qty; });
+  const newCards = new Set(rows.map(keyOf).filter(k => !IX.byKey.has(k))).size;
+  const sold = rows.filter(r => r.status === 'venduto');
+  $('#impv').innerHTML = !rows.length ? `<div class="note" style="margin-top:12px">Nessuna carta trovata in <b>${esc(fname)}</b>. Serve almeno una colonna “Nome carta” (o “Item Name”).</div>` : `
+    <div class="note" style="margin-top:12px">
+      <b>${esc(fname)}</b> · formato: <b>${esc(info.format)}</b>${info.sheets.length ? ' · fogli: ' + info.sheets.map(esc).join(', ') : ''}${info.skipped.length ? ` <span class="muted">(ignorati: ${info.skipped.map(esc).join(', ')})</span>` : ''}<br>
+      ${info.rawRows} righe lette → <b>${rows.length}</b> righe dopo l'unione delle copie identiche · <b>${newCards}</b> carte nuove · ${sum(rows, r => r.qty)} copie
+      (${Object.entries(byGame).map(([g, n]) => `${esc(g)}: ${n}`).join(', ')})<br>
+      ${sold.length} righe vendute (incasso ${eur(sum(sold, r => r.sell_price))}) · spesa singole ${eur(sum(rows.filter(r => r.buy_price != null), r => r.buy_price * r.qty))}
+      ${lots.length ? ` · ${lots.length} lotti (${eur(sum(lots, l => l.total_price))})${lots.some(l => l._guessed) ? ' <span class="neg">— alcuni lotti non erano nel foglio “Lotti”: controlla il prezzo dopo l\'import</span>' : ''}` : ''}
+    </div>
+    <div class="tw" style="margin-top:10px;max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:6px"><table class="t"><thead><tr><th>Gioco</th><th>Carta</th><th>Espansione</th><th>Rarità</th><th>Q.tà</th><th></th><th class="right">Acquisto</th><th>Stato</th></tr></thead><tbody>
+      ${rows.slice(0, 40).map(r => `<tr><td class="small">${esc(r.game)}</td><td>${esc(r.name)}</td><td class="small muted">${esc(r.expansion)}</td><td class="small">${esc(r.rarity)}</td><td>${r.qty}</td><td>${condB(r.condition)}</td>
+        <td class="right">${r.lotRef ? '<span class="b lotb">lotto</span>' : eur(r.buy_price)}</td><td>${r.status === 'venduto' ? '<span class="b st-v">Venduta</span>' : '<span class="b st-d">Disp.</span>'}</td></tr>`).join('')}
+    </tbody></table></div>${rows.length > 40 ? `<div class="small muted" style="margin-top:4px">…e altre ${rows.length - 40} righe</div>` : ''}
+    <div class="mfoot" style="border:0"><button class="btn" id="impx">Annulla</button><button class="btn pri" id="impgo">Importa ${rows.length} righe</button></div>`;
+  if (!rows.length) return;
+  $('#impx').onclick = () => { $('#impv').innerHTML = ''; $('#imf').value = ''; };
+  $('#impgo').onclick = async () => { $('#impgo').disabled = true; $('#impgo').textContent = 'Importazione…'; const ok = await runImport(plan); if (ok) location.hash = '#/collezione'; };
+}
+async function deleteAll(){
+  openModal('Elimina tutto', `<p style="margin-top:0">Verranno cancellate <b>${S.cards.size}</b> carte, <b>${S.copies.size}</b> righe di copie e <b>${S.lots.size}</b> lotti. Scarico prima un backup JSON e potrai comunque annullare con ↶.</p>
+    <label class="f">Scrivi <b>ELIMINA</b> per confermare</label><input class="inp" id="delc"><div class="mfoot"><button class="btn" data-c>Annulla</button><button class="btn dan fill" id="delgo" disabled>Elimina tutto</button></div>`, {onMount: m => {
+    $('[data-c]', m).onclick = closeModal;
+    $('#delc', m).oninput = e => { $('#delgo', m).disabled = e.target.value.trim().toUpperCase() !== 'ELIMINA'; };
+    $('#delgo', m).onclick = async () => {
+      exportJSON(); closeModal();
+      await commit('Archivio svuotato', async tx => { await tx.remove('copies', [...S.copies.keys()]); await tx.remove('lots', [...S.lots.keys()]); await tx.remove('cards', [...S.cards.keys()]); });
+    };
+  }});
+}
+
+/* ===================== azioni globali ===================== */
+const ACT = {
+  undo: () => undo(),
+  addCard: d => addCardForm({game: d.game, exp: d.exp, card: d.card, lot: d.lot}),
+  editCard: d => editCardForm(d.id),
+  delCard: async d => {
+    const c = S.cards.get(d.id), n = sum(copiesOf(d.id), x => x.qty);
+    if (!await confirmBox('Elimina carta', `Eliminare <b>${esc(c.name)}</b> e tutte le sue ${n} copie (vendute comprese)?`, 'Elimina')) return;
+    const g = c.game, e = c.expansion;
+    if (await commit(`Eliminata ${c.name}`, async tx => { await tx.remove('copies', copiesOf(d.id).map(x => x.id)); await tx.remove('cards', d.id); })) location.hash = `#/g/${enc(g)}/${enc(e)}`;
+  },
+  editCopy: d => editCopyForm(d.id),
+  delCopy: async d => {
+    const x = S.copies.get(d.id), c = S.cards.get(x.card_id);
+    if (!await confirmBox('Elimina copia', `Eliminare ${x.qty}× <b>${esc(c.name)}</b> (${esc(x.condition || '')})?`, 'Elimina')) return;
+    await commit(`Eliminata copia di ${c.name}`, async tx => {
+      await tx.remove('copies', d.id);
+      if (!copiesOf(c.id).filter(y => S.copies.has(y.id)).length) await tx.remove('cards', c.id);
+    });
+    if (!S.cards.has(c.id)) location.hash = '#/collezione';
+  },
+  sell: d => sellForm(d.id),
+  changeImg: d => imageForm(d.id),
+  addLot: () => lotForm(),
+  editLot: d => lotForm(d.id),
+  delLot: async d => {
+    const l = S.lots.get(d.id), cs = lotCopies(d.id);
+    openModal('Elimina lotto', `<p style="margin-top:0">Eliminare il lotto <b>${esc(l.description)}</b>?</p>${cs.length ? `<label><input type="checkbox" id="dlc"> Elimina anche le ${sum(cs, x => x.qty)} carte del lotto</label><div class="small muted" style="margin-top:4px">Se non le elimini restano in collezione come carte senza prezzo d'acquisto.</div>` : ''}
+      <div class="mfoot"><button class="btn" data-c>Annulla</button><button class="btn dan fill" id="dlgo">Elimina</button></div>`, {onMount: m => {
+      $('[data-c]', m).onclick = closeModal;
+      $('#dlgo', m).onclick = async () => {
+        const alsoCards = $('#dlc', m)?.checked; closeModal();
+        const ok = await commit('Lotto eliminato', async tx => {
+          const ids = cs.map(x => x.id);
+          if (alsoCards){ const cardIds = new Set(cs.map(x => x.card_id)); await tx.remove('copies', ids);
+            const empty = [...cardIds].filter(cid => ![...S.copies.values()].some(x => x.card_id === cid)); await tx.remove('cards', empty); }
+          else await tx.update('copies', ids, {lot_id: null});
+          await tx.remove('lots', d.id);
+        });
+        if (ok) location.hash = '#/lotti';
+      };
+    }});
+  },
+  exportJson: () => exportJSON(),
+  exportXlsx: () => exportXLSX(),
+  deleteAll: () => deleteAll(),
+  settings: () => settingsModal(),
+};
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b || !S.user) return;
+  e.preventDefault(); ACT[b.dataset.act]?.(b.dataset, b, e);
+});
+
+function settingsModal(){
+  const cfg = getCfg();
+  openModal('Impostazioni', `
+    <dl class="info"><dt>Account</dt><dd>${esc(S.user.email || '—')}</dd><dt>Archiviazione</dt><dd>${S.mode === 'local' ? 'Solo questo browser' : 'Supabase'}</dd>
+    ${S.mode === 'supabase' ? `<dt>Progetto</dt><dd class="small">${esc(cfg?.url || '')}</dd>` : ''}
+    <dt>Contenuto</dt><dd>${S.cards.size} carte · ${S.copies.size} righe · ${S.lots.size} lotti</dd></dl>
+    <div class="mfoot">${cfg?.fixed ? '' : '<button class="btn dan" id="chg">Cambia collegamento</button>'}<button class="btn" id="rel">Ricarica dati</button><button class="btn pri" id="out">${S.mode === 'local' ? 'Esci' : 'Esci dall\'account'}</button></div>`,
+  {onMount: m => {
+    $('#rel', m).onclick = async () => { closeModal(); await loadAll(); render(); toast('Dati ricaricati'); };
+    $('#out', m).onclick = async () => { closeModal(); if (S.mode === 'supabase') await sb.auth.signOut(); S.user = null; undoStack.length = 0; if (S.mode === 'local') setCfg(null); render(); };
+    $('#chg', m) && ($('#chg', m).onclick = async () => { closeModal(); if (S.mode === 'supabase') await sb.auth.signOut(); setCfg(null); S.user = null; sb = null; undoStack.length = 0; render(); });
+  }});
+}
+
+/* ===================== AUTENTICAZIONE ===================== */
+function renderAuth(){
+  const cfg = getCfg();
+  const root = $('#root');
+  if (!cfg){
+    root.innerHTML = `<div class="auth"><div class="logo"><i>CA</i>Card<span>Archive</span></div><div class="panel">
+      <h2>Collega il tuo database Supabase</h2>
+      <p class="muted small" style="margin-top:-4px">Su supabase.com → il tuo progetto → <b>Project Settings → API</b>: copia “Project URL” e la chiave <b>anon public</b>.</p>
+      <form id="cfgf"><label class="f">Project URL</label><input class="inp" name="url" placeholder="https://xxxx.supabase.co" required>
+      <label class="f" style="margin-top:10px">Chiave anon public</label><input class="inp" name="key" required placeholder="eyJhbGciOi…">
+      <div class="mfoot"><button class="btn pri" style="width:100%;justify-content:center">Collega</button></div></form>
+      <div class="note">Ricorda di eseguire una volta lo script <b>schema.sql</b> nel SQL Editor di Supabase.</div>
+      <p class="small muted" style="text-align:center;margin:14px 0 0">Vuoi solo provarla? <a href="#" id="loc">Usa senza account (dati solo in questo browser)</a></p>
+    </div></div>`;
+    $('#cfgf').onsubmit = e => { e.preventDefault(); const url = fixUrl(e.target.url.value), key = clean(e.target.key.value).replace(/^["']|["']$/g, '');
+      if (!/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/i.test(url) && !confirm('L\'URL ' + url + ' non sembra un indirizzo Supabase (https://xxxx.supabase.co). Usarlo comunque?')) return; setCfg({mode: 'supabase', url, key}); boot(); };
+    $('#loc').onclick = e => { e.preventDefault(); setCfg({mode: 'local'}); boot(); };
+    return;
+  }
+  if (cfg.mode === 'local'){ boot(); return; }
+  root.innerHTML = `<div class="auth"><div class="logo"><i>CA</i>Card<span>Archive</span></div><div class="panel">
+    <div class="seg" id="am" style="width:100%;margin-bottom:14px"><button class="on" data-v="in" style="flex:1">Accedi</button><button data-v="up" style="flex:1">Registrati</button></div>
+    <form id="lf2"><label class="f">Email</label><input class="inp" name="email" type="email" autocomplete="email" required>
+    <label class="f" style="margin-top:10px">Password</label><input class="inp" name="pw" type="password" autocomplete="current-password" minlength="6" required>
+    <div class="mfoot"><button class="btn pri" id="lbtn" style="width:100%;justify-content:center">Accedi</button></div></form>
+    <div id="amsg"></div>
+    ${cfg.fixed ? '' : `<p class="small muted" style="text-align:center;margin:12px 0 0"><a href="#" id="reset">Cambia progetto Supabase</a></p>`}
+  </div></div>`;
+  let mode = 'in';
+  $$('#am button').forEach(b => b.onclick = () => { mode = b.dataset.v; $$('#am button').forEach(x => x.classList.toggle('on', x === b)); $('#lbtn').textContent = mode === 'in' ? 'Accedi' : 'Crea account'; });
+  $('#reset') && ($('#reset').onclick = e => { e.preventDefault(); setCfg(null); sb = null; renderAuth(); });
+  $('#lf2').onsubmit = async e => {
+    e.preventDefault(); const email = e.target.email.value.trim(), password = e.target.pw.value;
+    $('#lbtn').disabled = true; busy(true);
+    try {
+      const r = mode === 'in' ? await sb.auth.signInWithPassword({email, password}) : await sb.auth.signUp({email, password, options: {emailRedirectTo: location.origin + location.pathname}});
+      if (r.error) throw r.error;
+      if (mode === 'up' && !r.data.session){ $('#amsg').innerHTML = `<div class="note" style="margin-top:12px">Account creato: apri l'email di conferma che ti ha mandato Supabase, poi torna qui e accedi.</div>`; }
+      else await afterLogin(r.data.session.user);
+    } catch (er){
+      const msg = /invalid login/i.test(er.message) ? 'Email o password errate' : /not confirmed/i.test(er.message) ? 'Devi prima confermare l\'email (controlla la posta)' : /fetch/i.test(er.message) ? 'Impossibile raggiungere Supabase: il progetto potrebbe essere in pausa' : /invalid path|invalid api key|no api key/i.test(er.message) ? 'URL o chiave di Supabase non corretti. Usa "Cambia progetto Supabase" qui sotto e incolla Project URL (https://xxxx.supabase.co) e la chiave anon public.' : er.message;
+      $('#amsg').innerHTML = `<div class="note" style="margin-top:12px;border-color:#f0c9c9;background:#fdf2f2;color:#8a2a2a">${esc(msg)}</div>`;
+    } finally { $('#lbtn') && ($('#lbtn').disabled = false); busy(false); }
+  };
+}
+async function afterLogin(user){
+  S.user = user;
+  $('#root').innerHTML = `<div class="auth"><div class="panel empty">Caricamento archivio…</div></div>`;
+  try { await loadAll(); }
+  catch (e){
+    console.error(e);
+    const hint = /relation|does not exist|schema cache/i.test(e.message) ? 'Le tabelle non esistono ancora: esegui lo script schema.sql nel SQL Editor di Supabase.' : e.message;
+    $('#root').innerHTML = `<div class="auth"><div class="panel"><h2>Impossibile caricare i dati</h2><p>${esc(hint)}</p><button class="btn pri" onclick="location.reload()">Riprova</button> <button class="btn" id="lo">Esci</button></div></div>`;
+    $('#lo').onclick = async () => { if (sb) await sb.auth.signOut(); S.user = null; render(); };
+    return;
+  }
+  render();
+}
+async function boot(){
+  const cfg = getCfg();
+  if (!cfg){ renderAuth(); return; }
+  S.mode = cfg.mode;
+  if (cfg.mode === 'local'){ await afterLogin({email: 'Archivio locale'}); return; }
+  if (!window.supabase){ $('#root').innerHTML = `<div class="auth"><div class="panel">Impossibile caricare la libreria Supabase. Controlla la connessione e ricarica la pagina.</div></div>`; return; }
+  sb = window.supabase.createClient(cfg.url, cfg.key, {auth: {persistSession: true, autoRefreshToken: true, storageKey: 'cardarchive.auth'}});
+  const {data} = await sb.auth.getSession();
+  if (data.session) await afterLogin(data.session.user); else renderAuth();
+  sb.auth.onAuthStateChange((ev, session) => { if (ev === 'SIGNED_OUT'){ S.user = null; render(); } });
+}
+boot();
+</script>
+</body>
+</html>
