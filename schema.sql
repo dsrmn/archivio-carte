@@ -121,3 +121,8 @@ create policy orders_own   on public.orders   for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy settings_own on public.settings for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- =============================================================
+-- Collegamento delle carte al catalogo Cardmarket
+-- =============================================================
+alter table public.cards add column if not exists cm_id bigint;   -- idProduct Cardmarket (-1 = nessuna corrispondenza)
