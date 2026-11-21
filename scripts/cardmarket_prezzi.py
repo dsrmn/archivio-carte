@@ -18,7 +18,7 @@ GAMES = {3: "Yu-Gi-Oh!", 6: "Pokémon", 18: "One Piece"}
 OUT = sys.argv[1] if len(sys.argv) > 1 else "out"
 
 # parole generiche dei prodotti sigillati da togliere per ottenere il nome dell'espansione
-GENERIC = r"(booster|boosters|box|display|pack|packs|case|blister|bundle|tin|tins|deck|decks|sleeved|collection|set|kit|lot|bundle|elite|trainer|etb|starter|structure|special|edition|1st|unlimited|english|german|french|italian|spanish|japanese|korean|chinese|portuguese|en|de|fr|it|es|jp|kr|-|–|—|:|\+|&|\d+x?)"
+GENERIC = r"(booster|boosters|box|display|pack|packs|case|blister|bundle|tin|tins|deck|decks|sleeved|collection|set|kit|lot|bundle|elite|trainer|etb|starter|structure|special|edition|1st|unlimited|english|german|french|italian|spanish|korean|chinese|portuguese|en|de|fr|it|es|jp|kr|-|–|—|:|\+|&|\(\d+[^)]*\)|\d+x)"
 GENERIC_RE = re.compile(r"(?:\s+" + GENERIC + r")+$", re.I)
 
 
@@ -28,11 +28,15 @@ def get(url):
         return json.load(r)
 
 
+STOP = {"the", "of", "and", "a", "de", "vs", "vs.", "&", "-", "of the", "le", "la", "du"}
+W = lambda w: w.lower().strip(":,;.!")
+
+
 def common_prefix_words(names):
     ws = [n.split() for n in names]
     out = []
     for parts in zip(*ws):
-        if all(p.lower() == parts[0].lower() for p in parts):
+        if all(W(p) == W(parts[0]) for p in parts):
             out.append(parts[0])
         else:
             break
@@ -52,6 +56,10 @@ def expansion_names(nonsingles):
         if len(cand.split()) < 1 or len(cand) < 3:
             cand = common_prefix_words(names) if len(names) > 1 else names[0]
         cand = GENERIC_RE.sub("", cand).strip(" -–—:")
+        if not cand or W(cand.split()[-1]) in STOP:
+            alt = GENERIC_RE.sub("", (boosters or names)[0]).strip(" -–—:")
+            if alt and W(alt.split()[-1]) not in STOP:
+                cand = alt
         if len(cand) >= 3:
             res[str(eid)] = cand
     return res
