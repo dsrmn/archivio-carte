@@ -1,6 +1,6 @@
 // Service worker: permette di aprire l'app anche senza connessione.
 // Prova prima la rete (così ricevi gli aggiornamenti) e ripiega sulla copia salvata.
-const CACHE = "archivio-carte-v1";
+const CACHE = "dsr-archive-v2";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icon.svg"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
