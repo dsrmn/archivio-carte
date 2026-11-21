@@ -171,7 +171,22 @@ td.tc{width:44px;padding-right:0}
 .imgprev img{width:110px;border-radius:6px;cursor:pointer;border:3px solid transparent;box-shadow:0 2px 6px rgba(0,0,0,.2)}
 .imgprev img:hover{border-color:var(--blue)}
 
+/* vendite, lotti */
+.orow{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.orow .oq{width:84px;flex:none}.orow .op{width:120px;flex:none}.orow .x{align-self:flex-end;padding-bottom:6px}
+.osum{margin-top:14px;background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.osum-g{display:grid;grid-template-columns:1fr auto;gap:4px 18px;max-width:380px;margin-left:auto;font-variant-numeric:tabular-nums}
+.osum-g span{color:var(--muted)}.osum-g .tot{border-top:1px solid var(--line);padding-top:6px;margin-top:4px;font-size:16px;color:var(--text)}
+.prog{height:7px;background:var(--line);border-radius:4px;overflow:hidden;margin:2px 0 3px}.prog.big{height:12px;border-radius:6px}
+.prog i{display:block;height:100%;border-radius:inherit;transition:width .4s}
+a.panel.banner{display:flex;gap:12px;align-items:center;color:var(--text);border-color:#4a3a1c;background:linear-gradient(90deg,#2a2213,var(--card))}
+a.panel.banner:hover{text-decoration:none;border-color:var(--orange)}
+.tst.ok{background:#1d5c3d;border-color:#2c7a52}
+@media (max-width:760px){.orow{flex-wrap:wrap}.orow .grow{flex-basis:calc(100% - 50px)}.orow .oq,.orow .op{flex:1}}
+
 /* modal */
+.upg{background:#2a2213;border-bottom:1px solid #4a3a1c;color:#f3d9a6;font-size:13px}.upg>div{max-width:1240px;margin:0 auto;padding:8px 16px}.upg a{color:#ffbf5e;font-weight:600}
+
 .mback{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:5vh 12px;overflow-y:auto}
 .mbox{background:var(--card);border:1px solid var(--line);border-radius:10px;width:100%;max-width:560px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
 .mbox.wide{max-width:780px}
@@ -299,8 +314,8 @@ const EDITIONS = ['1st Edition','Unlimited','Limited Edition','Reprint'];
 const PLATFORMS = ['Cardmarket','CardTrader','eBay','Vinted','Di persona','Altro'];
 
 /* ===================== stato & backend ===================== */
-const TABLES = ['cards','lots','copies'];
-const S = {cards:new Map(), lots:new Map(), copies:new Map(), user:null, mode:null};
+const TABLES = ['cards','lots','orders','copies'];
+const S = {cards:new Map(), lots:new Map(), orders:new Map(), copies:new Map(), user:null, mode:null};
 let sb = null;
 const CFG_KEY = 'cardarchive.cfg';
 function getCfg(){
@@ -325,6 +340,7 @@ const LS = {
 };
 const chunk = (a, n) => { const r = []; for (let i = 0; i < a.length; i += n) r.push(a.slice(i, i+n)); return r; };
 const strip = r => { const o = {...r}; delete o.user_id; return o; };
+const dbRow = r => { if (!S.noOrders || !('order_id' in r)) return r; const o = {...r}; delete o.order_id; return o; };
 
 const DB = {
   async fetchAll(t){
@@ -340,15 +356,15 @@ const DB = {
   },
   async insert(t, rows){
     if (S.mode === 'local'){ LS.put(t, LS.get(t).concat(rows)); return; }
-    for (const c of chunk(rows, 500)){ const {error} = await sb.from(t).insert(c.map(strip)); if (error) throw error; }
+    for (const c of chunk(rows, 500)){ const {error} = await sb.from(t).insert(c.map(strip).map(dbRow)); if (error) throw error; }
   },
   async upsert(t, rows){
     if (S.mode === 'local'){ const m = new Map(LS.get(t).map(r => [r.id, r])); rows.forEach(r => m.set(r.id, r)); LS.put(t, [...m.values()]); return; }
-    for (const c of chunk(rows, 500)){ const {error} = await sb.from(t).upsert(c); if (error) throw error; }
+    for (const c of chunk(rows, 500)){ const {error} = await sb.from(t).upsert(c.map(dbRow)); if (error) throw error; }
   },
   async update(t, ids, patch){
     if (S.mode === 'local'){ const set = new Set(ids); LS.put(t, LS.get(t).map(r => set.has(r.id) ? {...r, ...patch} : r)); return; }
-    for (const c of chunk(ids, 200)){ const {error} = await sb.from(t).update(patch).in('id', c); if (error) throw error; }
+    for (const c of chunk(ids, 200)){ const {error} = await sb.from(t).update(dbRow(patch)).in('id', c); if (error) throw error; }
   },
   async remove(t, ids){
     if (S.mode === 'local'){ const set = new Set(ids); LS.put(t, LS.get(t).filter(r => !set.has(r.id))); return; }
@@ -358,16 +374,40 @@ const DB = {
 
 function normRow(t, r){
   const o = {...r};
-  if (t === 'copies'){ o.qty = Number(o.qty) || 1; o.buy_price = o.buy_price == null ? null : Number(o.buy_price); o.sell_price = o.sell_price == null ? null : Number(o.sell_price); }
+  if (t === 'orders'){ ['shipping_charged', 'shipping_cost', 'fee'].forEach(k => o[k] = Number(o[k]) || 0); }
+  if (t === 'copies'){ o.order_id = o.order_id ?? null; o.qty = Number(o.qty) || 1; o.buy_price = o.buy_price == null ? null : Number(o.buy_price); o.sell_price = o.sell_price == null ? null : Number(o.sell_price); }
   if (t === 'lots') o.total_price = Number(o.total_price) || 0;
   return o;
 }
 async function loadAll(){
   busy(true);
   try {
-    for (const t of TABLES){ const rows = await DB.fetchAll(t); S[t] = new Map(rows.map(r => [r.id, normRow(t, r)])); }
+    S.noOrders = false;
+    for (const t of TABLES){
+      let rows;
+      try { rows = await DB.fetchAll(t); }
+      catch (e){ if (t === 'orders' && /orders|schema cache|does not exist/i.test(e.message || '')){ S.noOrders = true; rows = []; } else throw e; }
+      S[t] = new Map(rows.map(r => [r.id, normRow(t, r)]));
+    }
   } finally { busy(false); }
 }
+
+/* ===== impostazioni (commissioni, spedizioni) ===== */
+const PLAT_DEFAULT = {Cardmarket: {pct: 5, fixed: 0}, CardTrader: {pct: 0, fixed: 0}, eBay: {pct: 0, fixed: 0}, Vinted: {pct: 0, fixed: 0}, 'Di persona': {pct: 0, fixed: 0}, Altro: {pct: 0, fixed: 0}};
+let SET = {fees: JSON.parse(JSON.stringify(PLAT_DEFAULT)), shipCost: 0, shipCharged: 0, stale: 6};
+function mergeSet(j){ if (!j) return; SET = {...SET, ...j, fees: {...JSON.parse(JSON.stringify(PLAT_DEFAULT)), ...(j.fees || {})}}; }
+async function loadSettings(){
+  try { mergeSet(JSON.parse(localStorage.getItem('cardarchive.settings') || 'null')); } catch {}
+  if (S.mode !== 'supabase') return;
+  try { const {data, error} = await sb.from('settings').select('data').maybeSingle(); if (!error && data?.data) mergeSet(data.data); } catch {}
+}
+async function saveSettings(){
+  localStorage.setItem('cardarchive.settings', JSON.stringify(SET));
+  if (S.mode !== 'supabase') return;
+  const {error} = await sb.from('settings').upsert({user_id: S.user.id, data: SET, updated_at: new Date().toISOString()});
+  if (error) toast('Salvate solo su questo dispositivo: riesegui schema.sql su Supabase', 'err');
+}
+const feeFor = (platform, items) => { const f = SET.fees[platform]; return f && items ? round2(items * (f.pct || 0) / 100 + (f.fixed || 0)) : 0; };
 
 /* ===== transazioni con annullamento ===== */
 const undoStack = [];
@@ -423,19 +463,37 @@ async function undo(){
 
 /* ===================== indici derivati ===================== */
 let IX = null;
+const OC = new Map(), ESTC = new Map();
 function index(){
-  const byCard = new Map(), byLot = new Map();
+  const byCard = new Map(), byLot = new Map(), byOrder = new Map();
+  OC.clear(); ESTC.clear();
   for (const c of S.copies.values()){
+    if (c.order_id) (byOrder.get(c.order_id) || byOrder.set(c.order_id, []).get(c.order_id)).push(c);
     (byCard.get(c.card_id) || byCard.set(c.card_id, []).get(c.card_id)).push(c);
     if (c.lot_id) (byLot.get(c.lot_id) || byLot.set(c.lot_id, []).get(c.lot_id)).push(c);
   }
   const byKey = new Map(); for (const c of S.cards.values()) byKey.set(keyOf(c), c);
   const games = [...new Set([...GAMES, ...[...S.cards.values()].map(c => c.game)])];
-  IX = {byCard, byLot, byKey, games};
+  IX = {byCard, byLot, byOrder, byKey, games};
   return IX;
 }
 const copiesOf = id => IX.byCard.get(id) || [];
 const lotCopies = id => IX.byLot.get(id) || [];
+const orderItems = id => IX.byOrder.get(id) || [];
+function orderCalc(o){
+  const items = orderItems(o.id), gross = sum(items, c => c.sell_price);
+  const extra = (o.fee || 0) + (o.shipping_cost || 0) - (o.shipping_charged || 0);
+  return {items, gross, extra, net: gross - extra, qty: sum(items, c => c.qty), hasLot: items.some(c => c.lot_id)};
+}
+function oc(o){ let k = OC.get(o.id); if (!k){ k = orderCalc(o); OC.set(o.id, k); } return k; }
+/** incasso netto di una riga venduta: prezzo − la sua quota di commissione e spedizione dell'ordine */
+function netSell(c){
+  if (c.sell_price == null) return 0;
+  const o = c.order_id && S.orders.get(c.order_id); if (!o) return c.sell_price;
+  const k = oc(o), share = k.gross ? c.sell_price / k.gross : 1 / (k.items.length || 1);
+  return c.sell_price - share * k.extra;
+}
+function estUnit(cardId){ if (!ESTC.has(cardId)) ESTC.set(cardId, cardStats(cardId).avgSell); return ESTC.get(cardId); }
 function cardStats(id){
   const cs = copiesOf(id);
   const av = cs.filter(c => c.status !== 'venduto'), so = cs.filter(c => c.status === 'venduto');
@@ -447,9 +505,9 @@ function cardStats(id){
   return {
     avail: sum(av, c => c.qty), sold: soldQty,
     avgBuy: buyQty ? sum(buys, c => c.buy_price * c.qty) / buyQty : null,
-    avgSell: soldQty ? sum(so, c => c.sell_price) / soldQty : null,
-    earned: sum(so, c => c.sell_price),
-    margin: singlesSold.length ? sum(singlesSold, c => c.sell_price - c.buy_price * c.qty) : null,
+    avgSell: (q => q ? sum(so.filter(c => c.sell_price != null), c => c.sell_price) / q : null)(sum(so.filter(c => c.sell_price != null), c => c.qty)),
+    earned: sum(so, c => c.sell_price), earnedNet: sum(so, c => netSell(c)),
+    margin: singlesSold.length ? sum(singlesSold, c => netSell(c) - c.buy_price * c.qty) : null,
     lastSale, conds: [...new Set(av.map(c => c.condition).filter(Boolean))]
   };
 }
@@ -684,6 +742,7 @@ function shell(){
     <div class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="gsearch" placeholder="Cerca una carta nel tuo archivio…"></div>
     <div class="top-actions">
       <button class="tbtn" data-act="undo" ${undoStack.length ? '' : 'disabled'} title="${undoStack.length ? 'Annulla: ' + esc(undoStack.at(-1).label) : 'Niente da annullare'}">↶ <span class="lbl">Annulla</span></button>
+      <button class="tbtn" data-act="newOrder" title="Registra una vendita">€ <span class="lbl">Vendi</span></button>
       <button class="tbtn" data-act="addCard">＋ <span class="lbl">Aggiungi carta</span></button>
       <button class="tbtn" data-act="settings" title="${esc(S.user?.email || '')}">⚙</button>
     </div>
@@ -693,10 +752,13 @@ function shell(){
     ${IX.games.map(x => nav('#/g/' + enc(x), esc(x), g === x)).join('')}
     <span class="sep"></span>
     ${nav('#/collezione', 'Collezione', p0 === 'collezione')}
+    ${nav('#/vendite', 'Vendite', p0 === 'vendite')}
     ${nav('#/lotti', 'Lotti', p0 === 'lotti' || p0 === 'lotto')}
+    ${nav('#/giacenze', 'Giacenze', p0 === 'giacenze')}
     ${nav('#/guadagni', 'Guadagni', p0 === 'guadagni')}
     ${nav('#/dati', 'Importa / Esporta', p0 === 'dati')}
   </div></nav></header>
+  ${S.noOrders ? `<div class="upg"><div>⚙️ Per attivare <b>vendite, commissioni e spedizioni</b> serve un piccolo aggiornamento del database. <a href="#" data-act="upgrade">Come si fa</a></div></div>` : ''}
   <main id="app"></main>`;
 }
 let lastShellKey = '';
@@ -722,6 +784,8 @@ function render(){
     else if (p0 === 'lotti') pageLots(app);
     else if (p0 === 'lotto') pageLot(app, p1);
     else if (p0 === 'guadagni') pageEarnings(app);
+    else if (p0 === 'vendite') pageOrders(app);
+    else if (p0 === 'giacenze') pageStale(app);
     else if (p0 === 'dati') pageData(app);
     else app.innerHTML = `<div class="panel empty">Pagina non trovata. <a href="#/">Torna alla home</a></div>`;
   } catch (e){ console.error(e); app.innerHTML = `<div class="panel">Errore di visualizzazione: ${esc(e.message)}</div>`; }
@@ -738,8 +802,9 @@ function totals(game){
   const lots = game ? [...lotIds].map(id => S.lots.get(id)).filter(Boolean) : [...S.lots.values()];
   const spentSingles = sum(cps.filter(c => !c.lot_id), c => (c.buy_price || 0) * c.qty);
   const spentLots = sum(lots, l => l.total_price);
-  const earned = sum(cps.filter(c => c.status === 'venduto'), c => c.sell_price);
-  return {cards: cards.filter(c => copiesOf(c.id).some(x => x.status !== 'venduto')).length, avail: sum(av, c => c.qty),
+  const soldC = cps.filter(c => c.status === 'venduto');
+  const earned = sum(soldC, c => c.sell_price), net = sum(soldC, c => netSell(c));
+  return {net, costs: earned - net, cards: cards.filter(c => copiesOf(c.id).some(x => x.status !== 'venduto')).length, avail: sum(av, c => c.qty),
     sold: sum(cps.filter(c => c.status === 'venduto'), c => c.qty), spent: spentSingles + spentLots, spentLots, earned,
     stockCost: sum(av.filter(c => !c.lot_id), c => (c.buy_price || 0) * c.qty)};
 }
@@ -747,8 +812,8 @@ function statTiles(t){
   return `<div class="stats">
     <div class="stat"><div class="l">Copie disponibili</div><div class="v">${t.avail.toLocaleString('it-IT')}</div><div class="s">${t.cards.toLocaleString('it-IT')} carte diverse</div></div>
     <div class="stat"><div class="l">Speso</div><div class="v">${eur(t.spent)}</div><div class="s">di cui lotti ${eur(t.spentLots)}</div></div>
-    <div class="stat"><div class="l">Incassato</div><div class="v">${eur(t.earned)}</div><div class="s">${t.sold.toLocaleString('it-IT')} copie vendute</div></div>
-    <div class="stat"><div class="l">Saldo</div><div class="v">${signEur(t.earned - t.spent)}</div><div class="s">incassato − speso</div></div>
+    <div class="stat"><div class="l">Incassato netto</div><div class="v">${eur(t.net)}</div><div class="s">${t.sold.toLocaleString('it-IT')} copie vendute · commissioni e spedizioni ${eur(t.costs)}</div></div>
+    <div class="stat"><div class="l">Saldo</div><div class="v">${signEur(t.net - t.spent)}</div><div class="s">incassato netto − speso</div></div>
   </div>`;
 }
 function pageHome(app){
@@ -762,11 +827,13 @@ function pageHome(app){
   ev.sort((a, b) => b.d.localeCompare(a.d) || (b.c.created_at || '').localeCompare(a.c.created_at || ''));
   app.innerHTML = `
     <div class="pagehead"><div class="grow"><h1>Il tuo archivio</h1><div class="muted">Ciao ${esc(S.user.email || '')} · ${S.mode === 'local' ? 'dati salvati solo in questo browser' : 'sincronizzato con Supabase'}</div></div>
-      <button class="btn pri" data-act="addCard">＋ Aggiungi carta</button></div>
+      <button class="btn ok" data-act="newOrder">€ Nuova vendita</button><button class="btn pri" data-act="addCard">＋ Aggiungi carta</button></div>
     ${statTiles(t)}
+    ${(() => { const mo = SET.stale || 6, st = staleList(mo, ''); if (!st.length) return '';
+      return `<a class="panel banner" href="#/giacenze"><span style="font-size:22px">⏳</span><div class="grow"><b>${sum(st, x => x.c.qty)} copie ferme da più di ${mo} mesi</b><div class="small muted">valore stimato ${eur(sum(st, x => x.est || 0))} · guarda quali ribassare o vendere in blocco</div></div><span class="btn sm">Vedi giacenze ›</span></a>`; })()}
     <div class="panel"><h2>Giochi</h2><div class="games">
       ${IX.games.map(g => { const gt = totals(g); const ex = new Set([...S.cards.values()].filter(c => c.game === g).map(c => c.expansion)).size;
-        return `<a class="game" href="#/g/${enc(g)}"><div class="gicon ${gameCls(g)}">${esc(gameAbbr(g))}</div><div><b>${esc(g)}</b><div class="small muted">${gt.avail} copie · ${ex} espansioni</div><div class="small">${signEur(gt.earned - gt.spent)}</div></div></a>`; }).join('')}
+        return `<a class="game" href="#/g/${enc(g)}"><div class="gicon ${gameCls(g)}">${esc(gameAbbr(g))}</div><div><b>${esc(g)}</b><div class="small muted">${gt.avail} copie · ${ex} espansioni</div><div class="small">${signEur(gt.net - gt.spent)}</div></div></a>`; }).join('')}
     </div></div>
     <div class="panel flush"><div class="panel-h"><h2>Attività recente</h2></div>
       ${ev.length ? `<div class="tw"><table class="t"><thead><tr><th>Data</th><th>Tipo</th><th>Carta</th><th class="hide-m">Espansione</th><th>Q.tà</th><th class="right">Prezzo</th></tr></thead><tbody>
@@ -912,8 +979,8 @@ function pageCard(app, id){
           <dt>Acquisto medio</dt><dd>${eur(st.avgBuy)}</dd>
           <dt>Vendita media</dt><dd>${eur(st.avgSell)}</dd>
           <dt>Ultima vendita</dt><dd>${st.lastSale ? `${eur(unitSell(st.lastSale))} <span class="muted small">(${fdate(st.lastSale.sell_date)})</span>` : '—'}</dd>
-          <dt>Incassato</dt><dd>${eur(st.earned)}</dd>
-          <dt>Margine singole</dt><dd>${signEur(st.margin)}</dd>
+          <dt>Incassato netto</dt><dd>${eur(st.earnedNet)}${st.earnedNet !== st.earned ? ` <span class="muted small">(lordo ${eur(st.earned)})</span>` : ''}</dd>
+          <dt>Margine netto singole</dt><dd>${signEur(st.margin)}</dd>
         </dl>
         <div class="chart" style="flex:2 1 340px"><h3 style="margin-bottom:6px">Andamento prezzi</h3>${chart}</div>
       </div>
@@ -929,11 +996,11 @@ function pageCard(app, id){
 
     <div class="row">
       <div class="panel flush" style="flex:1 1 420px"><div class="panel-h"><h2>Storico vendite</h2></div>
-        ${so.length ? `<div class="tw"><table class="t"><thead><tr><th>Data</th><th>Q.tà</th><th></th><th class="hide-m">Piattaforma</th><th class="right">Incasso</th><th class="right">Margine</th><th></th></tr></thead><tbody>
+        ${so.length ? `<div class="tw"><table class="t"><thead><tr><th>Data</th><th>Q.tà</th><th></th><th class="hide-m">Piattaforma</th><th class="right">Incasso</th><th class="right">Margine netto</th><th></th></tr></thead><tbody>
         ${so.map(x => `<tr><td class="nowrap">${fdate(x.sell_date)}</td><td>${x.qty}</td><td>${condB(x.condition)}</td><td class="hide-m">${esc(x.platform || '—')}</td>
-          <td class="right nowrap">${eur(x.sell_price)}${x.qty > 1 ? `<div class="small muted">${eur(unitSell(x))} cad.</div>` : ''}</td>
-          <td class="right">${x.lot_id ? '<span class="small muted">sul lotto</span>' : x.buy_price != null && x.sell_price != null ? signEur(x.sell_price - x.buy_price * x.qty) : '—'}</td>
-          <td class="acts"><button class="btn sm" data-act="editCopy" data-id="${x.id}">✎</button></td></tr>`).join('')}
+          <td class="right nowrap">${eur(x.sell_price)}${x.qty > 1 ? `<div class="small muted">${eur(unitSell(x))} cad.</div>` : ''}${x.order_id ? `<div class="small muted">netto ${eur(netSell(x))}</div>` : ''}</td>
+          <td class="right">${x.lot_id ? '<span class="small muted">sul lotto</span>' : x.buy_price != null && x.sell_price != null ? signEur(netSell(x) - x.buy_price * x.qty) : '—'}</td>
+          <td class="acts">${x.order_id ? `<button class="btn sm" data-act="viewOrder" data-id="${x.order_id}" title="Apri vendita">🧾</button> ` : ''}<button class="btn sm" data-act="editCopy" data-id="${x.id}">✎</button></td></tr>`).join('')}
         </tbody></table></div>` : `<div class="empty">Nessuna vendita.</div>`}
       </div>
       <div class="panel flush" style="flex:1 1 380px"><div class="panel-h"><h2>Storico acquisti</h2></div>
@@ -1132,7 +1199,7 @@ function editCopyForm(id){
       const sold = E('status').value === 'venduto';
       const patch = {qty: Math.max(1, parseInt(E('qty').value) || 1), condition: E('condition').value, language: E('language').value || null, edition: clean(E('edition').value) || null,
         buy_date: E('buy_date').value || null, lot_id: E('lot').value || null, buy_price: E('lot').value ? null : num(E('buy_price').value), status: sold ? 'venduto' : 'disponibile',
-        sell_date: sold ? (E('sell_date').value || today()) : null, sell_price: sold ? num(E('sell_price').value) : null, platform: sold ? (clean(E('platform').value) || null) : null, notes: clean(E('notes').value) || null};
+        sell_date: sold ? (E('sell_date').value || today()) : null, sell_price: sold ? num(E('sell_price').value) : null, platform: sold ? (clean(E('platform').value) || null) : null, order_id: sold ? (x.order_id || null) : null, notes: clean(E('notes').value) || null};
       const ok = await commit(`Modificata copia di ${c.name}`, async tx => {
         await tx.update('copies', id, patch);
         const me = S.copies.get(id);
@@ -1144,79 +1211,256 @@ function editCopyForm(id){
   }});
 }
 
-/* ===== vendita ===== */
-function sellForm(id){
-  const x = S.copies.get(id), c = S.cards.get(x.card_id), st = cardStats(c.id);
-  openModal(`Vendi · ${c.name}`, `<form id="sf">
-    <div class="muted small" style="margin-bottom:10px">${esc(c.expansion)} · ${esc(c.rarity)} · ${condB(x.condition)} · disponibili ${x.qty} · ${x.lot_id ? 'da lotto' : 'pagata ' + eur(x.buy_price) + ' cad.'}</div>
+/* ===================== VENDITE (ordini) ===================== */
+const fmtIn = n => n ? round2(n).toFixed(2).replace('.', ',') : '';
+function lotSnapshot(lotIds){ index(); const m = new Map(); lotIds.forEach(id => { const l = S.lots.get(id); if (l) m.set(id, lotStats(l).profit); }); return m; }
+function celebrateLots(before){
+  index();
+  for (const [id, p0] of before){ const l = S.lots.get(id); if (!l) continue; if (p0 < 0 && lotStats(l).profit >= 0) toast(`🎉 Lotto “${l.description}” ripagato! Da qui in poi è tutto guadagno.`, 'ok'); }
+}
+async function mergeTwin(tx, id){
+  const me = S.copies.get(id); if (!me || me.status === 'venduto') return;
+  const twin = [...S.copies.values()].find(o => o.id !== id && sameAvail(o, me) && (o.notes || '') === (me.notes || ''));
+  if (twin){ await tx.update('copies', twin.id, {qty: twin.qty + me.qty}); await tx.remove('copies', id); }
+}
+function orderMargin(k){
+  const singles = k.items.filter(c => !c.lot_id && c.buy_price != null);
+  return singles.length ? sum(singles, c => netSell(c) - c.buy_price * c.qty) : null;
+}
+function orderForm(pre = {}){
+  if (S.noOrders){ upgradeModal(); return; }
+  const rows = [];
+  const addRow = id => { const x = S.copies.get(id); if (!x || x.status === 'venduto') return; const r = rows.find(r => r.id === id); if (r){ r.qty = Math.min(x.qty, r.qty + 1); return; } rows.push({id, qty: 1, price: ''}); };
+  (pre.items || []).forEach(addRow);
+  const plat0 = localStorage.getItem('cardarchive.lastPlatform') || 'Cardmarket';
+  openModal('Nuova vendita', `<form id="of" autocomplete="off">
     <div class="fg">
-      <div><label class="f">Copie vendute</label><input class="inp" name="qty" type="number" min="1" max="${x.qty}" value="1"></div>
-      <div><label class="f">Incasso totale (€)</label><input class="inp" name="price" inputmode="decimal" placeholder="${st.avgSell ? String(round2(st.avgSell)).replace('.', ',') : '0,00'}" autofocus></div>
-      <div><label class="f">Data vendita</label><input class="inp" name="date" type="date" value="${today()}"></div>
-      <div><label class="f">Piattaforma</label><input class="inp" name="platform" list="dl-pl" value="${esc(localStorage.getItem('cardarchive.lastPlatform') || 'Cardmarket')}"></div>
+      <div><label class="f">Data</label><input class="inp" type="date" name="date" value="${today()}"></div>
+      <div><label class="f">Piattaforma</label><input class="inp" name="platform" list="dl-pl" value="${esc(plat0)}"></div>
+      <div><label class="f">Acquirente <span style="font-weight:400">(facoltativo)</span></label><input class="inp" name="buyer" placeholder="nome utente"></div>
     </div>
-    <div id="sprev" class="note" style="margin-top:12px"></div>
+    <h3 style="margin:16px 0 4px">Carte vendute</h3>
+    <div id="orows"></div>
+    <div style="margin-top:10px"><div><input class="inp" id="oadd" placeholder="＋ Aggiungi una carta a questo ordine: scrivi il nome…"></div></div>
+    <div class="fg" style="margin-top:14px">
+      <div><label class="f">Spedizione pagata dall'acquirente €</label><input class="inp" name="sc" inputmode="decimal" value="${fmtIn(SET.shipCharged)}" placeholder="0,00"></div>
+      <div><label class="f">Tuo costo spedizione + imballaggio €</label><input class="inp" name="sk" inputmode="decimal" value="${fmtIn(SET.shipCost)}" placeholder="0,00"></div>
+      <div><label class="f">Commissione piattaforma €</label><input class="inp" name="fee" inputmode="decimal" placeholder="0,00"><div class="small muted" id="feehint" style="margin-top:3px"></div></div>
+    </div>
+    <div style="margin-top:12px"><label class="f">Note</label><input class="inp" name="notes"></div>
+    <div id="osum" class="osum"></div>
     <div class="mfoot"><button type="button" class="btn" data-c>Annulla</button><button class="btn ok">Registra vendita</button></div>${dl('dl-pl', PLATFORMS)}</form>`,
-  {onMount: m => {
-    const f = $('#sf', m), E = n => f.elements[n];
+  {wide: true, onMount: m => {
+    const f = $('#of', m), E = n => f.elements[n];
+    let feeTouched = false;
     $('[data-c]', m).onclick = closeModal;
-    const prev = () => { const q = Math.min(x.qty, Math.max(1, parseInt(E('qty').value) || 1)), p = num(E('price').value);
-      $('#sprev', m).innerHTML = p == null ? 'Inserisci l\'incasso totale per queste copie.' : `${eur(p / q)} a copia` + (x.lot_id ? ' · il guadagno viene conteggiato sul lotto' : x.buy_price != null ? ` · margine ${signEur(p - x.buy_price * q)}` : ''); };
-    f.addEventListener('input', prev); prev();
+    const itemsTotal = () => sum(rows, r => num(r.price) || 0);
+    const drawRows = () => {
+      $('#orows', m).innerHTML = rows.length ? rows.map((r, i) => {
+        const x = S.copies.get(r.id), c = S.cards.get(x.card_id), est = estUnit(c.id);
+        return `<div class="orow" data-i="${i}">${thumbHtml(c)}<div class="grow" style="min-width:0"><b>${esc(c.name)}</b>
+          <div class="small muted">${esc(c.expansion || '—')}${c.rarity ? ' · ' + esc(c.rarity) : ''} ${condB(x.condition)} ${x.language ? `<span class="b lang">${esc(x.language)}</span>` : ''} · ${x.lot_id ? 'da lotto' : 'pagata ' + eur(x.buy_price) + ' cad.'}${est != null ? ` · di solito la vendi a ${eur(est)}` : ''}</div></div>
+          <div class="oq"><label class="f">Q.tà <span style="font-weight:400">/ ${x.qty}</span></label><input class="inp" type="number" min="1" max="${x.qty}" value="${r.qty}" data-q></div>
+          <div class="op"><label class="f">Prezzo €</label><input class="inp" inputmode="decimal" value="${esc(r.price)}" data-p placeholder="${est != null ? fmtIn(est * r.qty) : '0,00'}"></div>
+          <button type="button" class="x" data-rm title="Togli dall'ordine">×</button></div>`;
+      }).join('') : '<div class="empty" style="padding:14px">Nessuna carta: aggiungile con la casella qui sotto.</div>';
+      $$('.orow', m).forEach(el => {
+        const r = rows[+el.dataset.i];
+        $('[data-q]', el).oninput = e => { r.qty = Math.max(1, Math.min(S.copies.get(r.id).qty, parseInt(e.target.value) || 1)); upd(); };
+        $('[data-p]', el).oninput = e => { r.price = e.target.value; upd(); };
+        $('[data-rm]', el).onclick = () => { rows.splice(+el.dataset.i, 1); drawRows(); upd(); };
+      });
+    };
+    const upd = () => {
+      const items = itemsTotal(), pl = clean(E('platform').value), fs = SET.fees[pl];
+      if (!feeTouched) E('fee').value = fmtIn(feeFor(pl, items));
+      $('#feehint', m).innerHTML = fs && (fs.pct || fs.fixed)
+        ? `${String(fs.pct || 0).replace('.', ',')}% degli articoli${fs.fixed ? ' + ' + eur(fs.fixed) : ''} (${esc(pl)})${feeTouched ? ' · <a href="#" id="feere">ricalcola</a>' : ''}`
+        : `nessuna commissione impostata per ${esc(pl || 'questa piattaforma')} · <a href="#" id="feeset">imposta</a>`;
+      $('#feere', m) && ($('#feere', m).onclick = e => { e.preventDefault(); feeTouched = false; upd(); });
+      $('#feeset', m) && ($('#feeset', m).onclick = e => { e.preventDefault(); e.stopPropagation(); feesModal(() => orderForm({items: rows.map(r => r.id)})); });
+      const sc = num(E('sc').value) || 0, sk = num(E('sk').value) || 0, fee = num(E('fee').value) || 0;
+      const net = items + sc - fee - sk;
+      let cost = 0, sGross = 0, lotQ = 0, unk = 0;
+      rows.forEach(r => { const x = S.copies.get(r.id), p = num(r.price) || 0; if (x.lot_id) lotQ += r.qty; else if (x.buy_price == null) unk += r.qty; else { cost += x.buy_price * r.qty; sGross += p; } });
+      const sNet = items ? sGross * net / items : 0;
+      $('#osum', m).innerHTML = `<div class="osum-g">
+          <span>Articoli</span><b>${eur(items)}</b>
+          <span>+ spedizione pagata dall'acquirente</span><b>${eur(sc)}</b>
+          <span>− commissione</span><b>${eur(fee)}</b>
+          <span>− spedizione e imballaggio</span><b>${eur(sk)}</b>
+          <span class="tot">Ti resta</span><b class="tot">${eur(net)}</b>
+        </div>
+        <div class="small muted" style="margin-top:8px">${cost ? `Margine netto sulle carte singole: ${signEur(sNet - cost)}` : ''}${lotQ ? `${cost ? ' · ' : ''}${lotQ} ${lotQ === 1 ? 'carta' : 'carte'} da lotto: il ricavo va a ripagare il lotto` : ''}${unk ? ` · ${unk} senza prezzo d'acquisto` : ''}</div>`;
+    };
+    f.addEventListener('input', e => { if (e.target.closest('.orow') || e.target.id === 'oadd') return; if (e.target === E('fee')) feeTouched = true; upd(); });
+    autocomplete($('#oadd', m), async (q, cb) => {
+      const fq = fold(q); if (!fq){ cb([]); return; }
+      cb([...S.copies.values()].filter(x => x.status !== 'venduto').map(x => ({x, c: S.cards.get(x.card_id)}))
+        .filter(o => o.c && fold(`${o.c.name} ${o.c.expansion}`).includes(fq)).slice(0, 15)
+        .map(({x, c}) => ({label: c.name, sub: `${c.expansion || '—'} · ${c.rarity || '—'} · ${x.condition || ''}${x.language ? ' ' + x.language : ''} · disponibili ${x.qty}${x.lot_id ? ' · da lotto' : ''}`, id: x.id})));
+    }, it => { addRow(it.id); $('#oadd', m).value = ''; drawRows(); upd(); });
     f.onsubmit = async e => {
       e.preventDefault();
-      const q = Math.min(x.qty, Math.max(1, parseInt(E('qty').value) || 1)), p = num(E('price').value);
-      if (p == null){ toast('Inserisci il prezzo di vendita', 'err'); return; }
-      localStorage.setItem('cardarchive.lastPlatform', clean(E('platform').value));
-      const sale = {status: 'venduto', sell_date: E('date').value || today(), sell_price: round2(p), platform: clean(E('platform').value) || null};
-      const ok = await commit(`Venduta ${q}× ${c.name} a ${eur(p)}`, async tx => {
-        if (q === x.qty) await tx.update('copies', id, sale);
-        else { await tx.update('copies', id, {qty: x.qty - q}); const {id: _, created_at, user_id, ...rest} = x; await tx.insert('copies', {...rest, id: uid(), qty: q, ...sale}); }
+      if (!rows.length){ toast('Aggiungi almeno una carta', 'err'); $('#oadd', m).focus(); return; }
+      const miss = rows.findIndex(r => num(r.price) == null);
+      if (miss >= 0){ toast('Manca il prezzo di una carta', 'err'); $$('[data-p]', m)[miss]?.focus(); return; }
+      const date = E('date').value || today(), pl = clean(E('platform').value) || null;
+      localStorage.setItem('cardarchive.lastPlatform', pl || '');
+      const order = {id: uid(), sell_date: date, platform: pl, buyer: clean(E('buyer').value) || null, shipping_charged: round2(num(E('sc').value) || 0),
+        shipping_cost: round2(num(E('sk').value) || 0), fee: round2(num(E('fee').value) || 0), notes: clean(E('notes').value) || null};
+      const before = lotSnapshot([...new Set(rows.map(r => S.copies.get(r.id).lot_id).filter(Boolean))]);
+      const n = sum(rows, r => r.qty), tot = itemsTotal();
+      const ok = await commit(`Vendita registrata: ${n} ${n === 1 ? 'carta' : 'carte'} a ${eur(tot)}`, async tx => {
+        await tx.insert('orders', order);
+        for (const r of rows){
+          const x = S.copies.get(r.id), q = Math.min(r.qty, x.qty);
+          const sale = {status: 'venduto', sell_date: date, sell_price: round2(num(r.price)), platform: pl, order_id: order.id};
+          if (q === x.qty) await tx.update('copies', x.id, sale);
+          else { await tx.update('copies', x.id, {qty: x.qty - q}); const {id: _i, created_at: _c, user_id: _u, ...rest} = S.copies.get(x.id); await tx.insert('copies', {...rest, id: uid(), qty: q, ...sale}); }
+        }
+      });
+      if (ok){ closeModal(); celebrateLots(before); }
+    };
+    drawRows(); upd();
+    if (!rows.length) setTimeout(() => $('#oadd', m).focus(), 50); else setTimeout(() => $('[data-p]', m)?.focus(), 50);
+  }});
+}
+function orderView(id){
+  const o = S.orders.get(id); if (!o) return;
+  index(); const k = oc(o), mg = orderMargin(k);
+  openModal(`Vendita del ${fdate(o.sell_date)}`, `<form id="ov">
+    <div class="fg">
+      <div><label class="f">Data</label><input class="inp" type="date" name="date" value="${o.sell_date || ''}"></div>
+      <div><label class="f">Piattaforma</label><input class="inp" name="platform" list="dl-pl" value="${esc(o.platform || '')}"></div>
+      <div><label class="f">Acquirente</label><input class="inp" name="buyer" value="${esc(o.buyer || '')}"></div>
+      <div><label class="f">Spedizione pagata dall'acquirente €</label><input class="inp" name="sc" inputmode="decimal" value="${fmtIn(o.shipping_charged)}"></div>
+      <div><label class="f">Costo spedizione + imballaggio €</label><input class="inp" name="sk" inputmode="decimal" value="${fmtIn(o.shipping_cost)}"></div>
+      <div><label class="f">Commissione €</label><input class="inp" name="fee" inputmode="decimal" value="${fmtIn(o.fee)}"></div>
+      <div class="full"><label class="f">Note</label><input class="inp" name="notes" value="${esc(o.notes || '')}"></div>
+    </div>
+    <div class="tw" style="margin-top:14px;border:1px solid var(--line);border-radius:6px"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th>Q.tà</th><th></th><th class="right">Prezzo</th><th class="right">Netto</th><th class="right">Margine</th><th></th></tr></thead><tbody>
+      ${k.items.map(x => { const c = S.cards.get(x.card_id); if (!c) return ''; return `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}" data-close-link>${esc(c.name)}</a><div class="small muted">${esc(c.expansion || '')}</div></td><td>${x.qty}</td><td>${condB(x.condition)}</td>
+        <td class="right">${eur(x.sell_price)}</td><td class="right">${eur(netSell(x))}</td><td class="right">${x.lot_id ? '<span class="small muted">sul lotto</span>' : x.buy_price != null ? signEur(netSell(x) - x.buy_price * x.qty) : '—'}</td>
+        <td class="acts"><button type="button" class="btn sm" data-act="editCopy" data-id="${x.id}">✎</button></td></tr>`; }).join('') || '<tr><td colspan="8" class="empty">Nessuna carta in questo ordine.</td></tr>'}
+    </tbody></table></div>
+    <div class="osum"><div class="osum-g"><span>Articoli</span><b>${eur(k.gross)}</b><span>+ spedizione pagata</span><b>${eur(o.shipping_charged)}</b><span>− commissione</span><b>${eur(o.fee)}</b><span>− spedizione e imballaggio</span><b>${eur(o.shipping_cost)}</b><span class="tot">Ti è rimasto</span><b class="tot">${eur(k.net)}</b></div>
+      ${mg != null ? `<div class="small muted" style="margin-top:8px">Margine netto sulle carte singole: ${signEur(mg)}${k.hasLot ? ' · le carte da lotto contano sul lotto' : ''}</div>` : ''}</div>
+    <div class="mfoot"><button type="button" class="btn dan" id="ocancel" style="margin-right:auto">Annulla vendita</button><button type="button" class="btn" data-c>Chiudi</button><button class="btn pri">Salva</button></div>${dl('dl-pl', PLATFORMS)}</form>`,
+  {wide: true, onMount: m => {
+    const f = $('#ov', m), E = n => f.elements[n];
+    $('[data-c]', m).onclick = closeModal;
+    $$('[data-close-link]', m).forEach(a => a.addEventListener('click', closeModal));
+    f.onsubmit = async e => {
+      e.preventDefault();
+      const patch = {sell_date: E('date').value || o.sell_date, platform: clean(E('platform').value) || null, buyer: clean(E('buyer').value) || null,
+        shipping_charged: round2(num(E('sc').value) || 0), shipping_cost: round2(num(E('sk').value) || 0), fee: round2(num(E('fee').value) || 0), notes: clean(E('notes').value) || null};
+      const ok = await commit('Vendita modificata', async tx => {
+        await tx.update('orders', id, patch);
+        const ids = orderItems(id).map(x => x.id);
+        if (ids.length) await tx.update('copies', ids, {sell_date: patch.sell_date, platform: patch.platform});
       });
       if (ok) closeModal();
     };
+    $('#ocancel', m).onclick = async () => {
+      closeModal();
+      if (!await confirmBox('Annulla vendita', `Le ${k.qty} carte di questo ordine torneranno disponibili e l'ordine verrà eliminato.`, 'Annulla vendita')) return;
+      await commit('Vendita annullata', async tx => {
+        const ids = orderItems(id).map(x => x.id);
+        await tx.update('copies', ids, {status: 'disponibile', sell_date: null, sell_price: null, platform: null, order_id: null});
+        for (const cid of ids) await mergeTwin(tx, cid);
+        await tx.remove('orders', id);
+      });
+    };
   }});
+}
+function upgradeModal(){
+  openModal('Aggiornamento del database', `<p style="margin-top:0">Per registrare le vendite come ordini (con commissioni e spedizioni) il tuo database Supabase va aggiornato una volta.</p>
+    <ol style="padding-left:18px;line-height:1.7"><li>Apri Supabase → <b>SQL Editor</b> → <b>New query</b></li><li>Incolla tutto il file <b>schema.sql</b> (lo trovi nel repository su GitHub) e premi <b>Run</b></li><li>Torna qui e ricarica la pagina</li></ol>
+    <div class="small muted">I tuoi dati non vengono toccati.</div><div class="mfoot"><button class="btn" data-c>Chiudi</button><button class="btn pri" onclick="location.reload()">Ho fatto, ricarica</button></div>`, {onMount: m => { $('[data-c]', m).onclick = closeModal; }});
+}
+function pageOrders(app){
+  const list = [...S.orders.values()].sort((a, b) => (b.sell_date || '').localeCompare(a.sell_date || '') || (b.created_at || '').localeCompare(a.created_at || '')).map(o => ({o, k: oc(o)}));
+  const legacy = sum([...S.copies.values()].filter(c => c.status === 'venduto' && !c.order_id), c => c.qty);
+  const T = {gross: sum(list, x => x.k.gross), fee: sum(list, x => x.o.fee), ship: sum(list, x => (x.o.shipping_cost || 0) - (x.o.shipping_charged || 0)), net: sum(list, x => x.k.net)};
+  app.innerHTML = `
+    <div class="crumbs"><a href="#/">Home</a> › <b>Vendite</b></div>
+    <div class="pagehead"><div class="grow"><h1>Vendite</h1><div class="muted">Ogni vendita è un ordine: più carte, una spedizione, una commissione.</div></div><button class="btn ok" data-act="newOrder">＋ Nuova vendita</button></div>
+    <div class="stats">
+      <div class="stat"><div class="l">Ordini</div><div class="v">${list.length}</div><div class="s">${sum(list, x => x.k.qty)} carte vendute</div></div>
+      <div class="stat"><div class="l">Incassato lordo</div><div class="v">${eur(T.gross)}</div><div class="s">prezzo degli articoli</div></div>
+      <div class="stat"><div class="l">Commissioni e spedizioni</div><div class="v">${eur(T.fee + T.ship)}</div><div class="s">commissioni ${eur(T.fee)} · spedizioni ${eur(T.ship)}</div></div>
+      <div class="stat"><div class="l">Ti è rimasto</div><div class="v">${eur(T.net)}</div><div class="s">incasso netto</div></div>
+    </div>
+    <div class="panel flush">${list.length ? `<div class="tw"><table class="t"><thead><tr><th>Data</th><th>Piattaforma</th><th class="hide-m">Acquirente</th><th class="right">Carte</th><th class="right">Articoli</th><th class="right hide-m">Commiss.</th><th class="right hide-m">Spediz.</th><th class="right">Netto</th><th class="right">Margine</th><th></th></tr></thead><tbody>
+      ${list.map(({o, k}) => { const mg = orderMargin(k); return `<tr><td class="nowrap">${fdate(o.sell_date)}</td><td>${esc(o.platform || '—')}</td><td class="hide-m">${esc(o.buyer || '')}</td><td class="right">${k.qty}</td><td class="right">${eur(k.gross)}</td>
+        <td class="right hide-m">${eur(o.fee)}</td><td class="right hide-m">${eur((o.shipping_cost || 0) - (o.shipping_charged || 0))}</td><td class="right"><b>${eur(k.net)}</b></td>
+        <td class="right">${mg != null ? signEur(mg) : ''}${k.hasLot ? `<div class="small muted">+ lotto</div>` : ''}</td><td class="acts"><button class="btn sm" data-act="viewOrder" data-id="${o.id}">Apri</button></td></tr>`; }).join('')}
+    </tbody></table></div>` : `<div class="empty">Nessuna vendita registrata come ordine. Premi “Nuova vendita” o “Vendi” su una carta.</div>`}</div>
+    ${legacy ? `<div class="note">${legacy} ${legacy === 1 ? 'carta venduta' : 'carte vendute'} prima degli ordini (o importate da Excel) non ${legacy === 1 ? 'compare' : 'compaiono'} qui: nei guadagni ${legacy === 1 ? 'conta' : 'contano'} al prezzo pieno, senza commissioni né spedizioni.</div>` : ''}`;
 }
 
 /* ===================== LOTTI ===================== */
 function lotStats(l){
-  const cs = lotCopies(l.id); const so = cs.filter(c => c.status === 'venduto');
-  const earned = sum(so, c => c.sell_price);
-  return {copies: sum(cs, c => c.qty), sold: sum(so, c => c.qty), left: sum(cs.filter(c => c.status !== 'venduto'), c => c.qty), earned, profit: earned - l.total_price};
+  const cs = lotCopies(l.id), so = cs.filter(c => c.status === 'venduto'), av = cs.filter(c => c.status !== 'venduto');
+  const gross = sum(so, c => c.sell_price), earned = sum(so, c => netSell(c));
+  let est = 0, unknown = 0;
+  av.forEach(c => { const u = estUnit(c.card_id); if (u != null) est += u * c.qty; else unknown += c.qty; });
+  return {copies: sum(cs, c => c.qty), sold: sum(so, c => c.qty), left: sum(av, c => c.qty), gross, earned, profit: earned - l.total_price,
+    est, unknown, pct: l.total_price > 0 ? earned / l.total_price * 100 : 100};
 }
+const progBar = (pct, ok, big) => `<div class="prog ${big ? 'big' : ''}"><i style="width:${Math.max(0, Math.min(100, pct)).toFixed(1)}%;background:${ok ? 'var(--green)' : 'var(--orange)'}"></i></div>`;
 function pageLots(app){
-  const lots = [...S.lots.values()].sort((a, b) => (b.buy_date || '').localeCompare(a.buy_date || '')).map(l => ({l, s: lotStats(l)}));
-  const tc = sum(lots, x => x.l.total_price), te = sum(lots, x => x.s.earned);
+  const lots = [...S.lots.values()].map(l => ({l, s: lotStats(l)}))
+    .sort((a, b) => ((a.s.profit >= 0) - (b.s.profit >= 0)) || (b.l.buy_date || '').localeCompare(a.l.buy_date || ''));
+  const tc = sum(lots, x => x.l.total_price), te = sum(lots, x => x.s.earned), paid = lots.filter(x => x.s.profit >= 0).length;
   app.innerHTML = `
     <div class="crumbs"><a href="#/">Home</a> › <b>Lotti</b></div>
-    <div class="pagehead"><div class="grow"><h1>Lotti</h1><div class="muted">Il costo di un lotto è condiviso: guadagno = incassato dalle vendite − prezzo pagato.</div></div><button class="btn pri" data-act="addLot">＋ Nuovo lotto</button></div>
-    <div class="stats"><div class="stat"><div class="l">Lotti</div><div class="v">${lots.length}</div></div><div class="stat"><div class="l">Pagato</div><div class="v">${eur(tc)}</div></div>
-      <div class="stat"><div class="l">Incassato</div><div class="v">${eur(te)}</div></div><div class="stat"><div class="l">Guadagno lotti</div><div class="v">${signEur(te - tc)}</div></div></div>
-    <div class="panel flush">${lots.length ? `<div class="tw"><table class="t"><thead><tr><th>Data</th><th>Descrizione</th><th class="right">Prezzo</th><th class="right hide-m">Carte</th><th class="right hide-m">Rimaste</th><th class="right">Incassato</th><th class="right">Guadagno</th><th></th></tr></thead><tbody>
+    <div class="pagehead"><div class="grow"><h1>Lotti</h1><div class="muted">Il costo di un lotto è condiviso: guadagno = ricavo netto delle carte vendute − prezzo pagato.</div></div><button class="btn pri" data-act="addLot">＋ Nuovo lotto</button></div>
+    <div class="stats"><div class="stat"><div class="l">Lotti</div><div class="v">${lots.length}</div><div class="s">${paid} già ripagati · ${lots.length - paid} da ripagare</div></div><div class="stat"><div class="l">Pagato</div><div class="v">${eur(tc)}</div></div>
+      <div class="stat"><div class="l">Ricavo netto</div><div class="v">${eur(te)}</div></div><div class="stat"><div class="l">Guadagno lotti</div><div class="v">${signEur(te - tc)}</div></div></div>
+    <div class="panel flush">${lots.length ? `<div class="tw"><table class="t"><thead><tr><th>Data</th><th>Descrizione</th><th class="right">Prezzo</th><th style="min-width:130px">Rientro</th><th class="right hide-m">Rimaste</th><th class="right hide-m">Ricavo netto</th><th class="right">Guadagno</th><th class="right hide-m">Stima rimaste</th><th></th></tr></thead><tbody>
       ${lots.map(({l, s}) => `<tr><td class="nowrap">${fdate(l.buy_date)}</td><td><a class="cname" href="#/lotto/${l.id}">${esc(l.description)}</a></td><td class="right">${eur(l.total_price)}</td>
-        <td class="right hide-m">${s.copies}</td><td class="right hide-m">${s.left}</td><td class="right">${eur(s.earned)}</td><td class="right">${signEur(s.profit)}</td>
+        <td>${progBar(s.pct, s.profit >= 0)}<div class="small muted">${s.profit >= 0 ? '<span class="b st-d">ripagato</span>' : Math.floor(s.pct) + '% · mancano ' + eur(-s.profit)}</div></td>
+        <td class="right hide-m">${s.left} / ${s.copies}</td><td class="right hide-m">${eur(s.earned)}</td><td class="right">${signEur(s.profit)}</td>
+        <td class="right hide-m">${s.left ? (s.est ? '≈ ' + eur(s.est) : '—') : ''}</td>
         <td class="acts"><button class="btn sm" data-act="editLot" data-id="${l.id}">✎</button></td></tr>`).join('')}
-    </tbody></table></div>` : `<div class="empty">Nessun lotto. Creane uno qui o scegli “Da un lotto” quando aggiungi una carta.</div>`}</div>`;
+    </tbody></table></div>` : `<div class="empty">Nessun lotto. Creane uno qui o scegli “Da un lotto” quando aggiungi una carta.</div>`}</div>
+    <div class="small muted">La stima delle carte rimaste usa i tuoi prezzi medi di vendita di quella carta (quelle mai vendute non sono stimate).</div>`;
 }
 function pageLot(app, id){
   const l = S.lots.get(id);
   if (!l){ app.innerHTML = `<div class="panel empty">Lotto non trovato. <a href="#/lotti">Torna ai lotti</a></div>`; return; }
   const s = lotStats(l);
-  const cs = lotCopies(id).map(x => ({x, c: S.cards.get(x.card_id)})).filter(r => r.c).sort((a, b) => a.c.name.localeCompare(b.c.name, 'it'));
+  const rows = lotCopies(id).map(x => ({x, c: S.cards.get(x.card_id)})).filter(r => r.c);
+  const av = rows.filter(r => r.x.status !== 'venduto').map(r => ({...r, est: estUnit(r.c.id)})).sort((a, b) => (b.est ?? -1) * b.x.qty - (a.est ?? -1) * a.x.qty);
+  const so = rows.filter(r => r.x.status === 'venduto').sort((a, b) => (b.x.sell_date || '').localeCompare(a.x.sell_date || ''));
+  const need = -s.profit;
+  const msg = s.profit >= 0
+    ? `<b class="pos">Lotto ripagato.</b> Hai già guadagnato ${eur(s.profit)}: tutto quello che vendi ora è guadagno${s.left ? ` (${s.left} ${s.left === 1 ? 'carta' : 'carte'} ancora da vendere${s.est ? `, stimate ≈ ${eur(s.est)}` : ''})` : ''}.`
+    : `Per rientrare ti mancano <b>${eur(need)}</b>${s.left ? `: in media <b>${eur(need / s.left)}</b> ${s.left === 1 ? 'per l\'ultima carta rimasta' : 'per ognuna delle ' + s.left + ' carte rimaste'}` : ' e non ci sono più carte da vendere'}.` +
+      (s.est ? ` Vendendo le rimaste ai tuoi prezzi medi incasseresti circa ${eur(s.est)}: ${s.est >= need ? '<b class="pos">rientreresti</b>' : `resteresti sotto di ${eur(need - s.est)}`}${s.unknown ? ` (${s.unknown} ${s.unknown === 1 ? 'carta' : 'carte'} senza stima)` : ''}.` : '');
   app.innerHTML = `
     <div class="crumbs"><a href="#/">Home</a> › <a href="#/lotti">Lotti</a> › <b>${esc(l.description)}</b></div>
     <div class="pagehead"><div class="grow"><h1>${esc(l.description)}</h1><div class="muted">Acquistato il ${fdate(l.buy_date)}</div></div>
       <button class="btn" data-act="editLot" data-id="${l.id}">✎ Modifica</button><button class="btn dan" data-act="delLot" data-id="${l.id}">Elimina</button>
       <button class="btn pri" data-act="addCard" data-lot="${l.id}">＋ Aggiungi carta al lotto</button></div>
-    <div class="stats"><div class="stat"><div class="l">Pagato</div><div class="v">${eur(l.total_price)}</div></div>
-      <div class="stat"><div class="l">Carte</div><div class="v">${s.copies}</div><div class="s">${s.left} ancora disponibili</div></div>
-      <div class="stat"><div class="l">Incassato</div><div class="v">${eur(s.earned)}</div><div class="s">${s.sold} vendute</div></div>
-      <div class="stat"><div class="l">Guadagno</div><div class="v">${signEur(s.profit)}</div><div class="s">${s.profit < 0 ? 'mancano ' + eur(-s.profit) + ' per rientrare' : 'lotto già ripagato'}</div></div></div>
-    <div class="panel flush">${cs.length ? `<div class="tw"><table class="t"><thead><tr><th>Carta</th><th class="hide-m">Espansione</th><th>Rarità</th><th>Q.tà</th><th></th><th>Stato</th><th class="right">Incasso</th><th></th></tr></thead><tbody>
-      ${cs.map(({x, c}) => `<tr><td><a class="cname" href="#/c/${c.id}">${esc(c.name)}</a></td><td class="hide-m muted">${esc(c.expansion)}</td><td>${c.rarity ? `<span class="b rar">${esc(c.rarity)}</span>` : ''}</td><td>${x.qty}</td><td>${condB(x.condition)}</td>
-        <td>${x.status === 'venduto' ? `<span class="b st-v">Venduta ${fdate(x.sell_date)}</span>` : '<span class="b st-d">Disponibile</span>'}</td><td class="right">${x.status === 'venduto' ? eur(x.sell_price) : ''}</td>
-        <td class="acts">${x.status !== 'venduto' ? `<button class="btn sm ok" data-act="sell" data-id="${x.id}">Vendi</button> ` : ''}<button class="btn sm" data-act="editCopy" data-id="${x.id}">✎</button></td></tr>`).join('')}
-    </tbody></table></div>` : `<div class="empty">Nessuna carta in questo lotto.</div>`}</div>`;
+    <div class="stats"><div class="stat"><div class="l">Pagato</div><div class="v">${eur(l.total_price)}</div><div class="s">${s.copies} carte</div></div>
+      <div class="stat"><div class="l">Ricavo netto</div><div class="v">${eur(s.earned)}</div><div class="s">${s.sold} vendute · lordo ${eur(s.gross)}</div></div>
+      <div class="stat"><div class="l">${s.profit >= 0 ? 'Guadagno' : 'Mancano per rientrare'}</div><div class="v">${s.profit >= 0 ? signEur(s.profit) : `<span class="neg">${eur(need)}</span>`}</div><div class="s">${s.left} ${s.left === 1 ? 'carta rimasta' : 'carte rimaste'}</div></div>
+      <div class="stat"><div class="l">Stima rimaste</div><div class="v">${s.est ? '≈ ' + eur(s.est) : '—'}</div><div class="s">${s.unknown ? s.unknown + ' senza stima' : 'ai tuoi prezzi medi'}</div></div></div>
+    <div class="panel">${progBar(s.pct, s.profit >= 0, true)}<div class="small muted" style="display:flex;justify-content:space-between;margin:4px 0 10px"><span>${Math.floor(Math.min(s.pct, 999))}% ripagato</span><span>${eur(s.earned)} su ${eur(l.total_price)}</span></div><div>${msg}</div></div>
+    <div class="panel flush"><div class="panel-h"><h2>Da vendere</h2><span class="muted">${s.left}</span></div>
+      ${av.length ? `<div class="tw"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th class="hide-m">Espansione</th><th>Rarità</th><th>Q.tà</th><th></th><th class="right">Stima</th><th></th></tr></thead><tbody>
+      ${av.map(({x, c, est}) => `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${esc(c.name)}</a></td><td class="hide-m muted">${esc(c.expansion)}</td><td>${c.rarity ? `<span class="b rar">${esc(c.rarity)}</span>` : ''}</td><td>${x.qty}</td><td>${condB(x.condition)}</td>
+        <td class="right">${est != null ? eur(est * x.qty) : '<span class="muted">—</span>'}</td>
+        <td class="acts"><button class="btn sm ok" data-act="sell" data-id="${x.id}">Vendi</button> <button class="btn sm" data-act="editCopy" data-id="${x.id}">✎</button></td></tr>`).join('')}
+      </tbody></table></div>` : `<div class="empty">Tutte le carte di questo lotto sono vendute.</div>`}</div>
+    ${so.length ? `<div class="panel flush"><div class="panel-h"><h2>Vendute</h2><span class="muted">${s.sold}</span></div><div class="tw"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th>Data</th><th>Q.tà</th><th class="right">Prezzo</th><th class="right">Netto</th><th></th></tr></thead><tbody>
+      ${so.map(({x, c}) => `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${esc(c.name)}</a></td><td class="nowrap">${fdate(x.sell_date)}</td><td>${x.qty}</td><td class="right">${eur(x.sell_price)}</td><td class="right">${eur(netSell(x))}</td>
+        <td class="acts">${x.order_id ? `<button class="btn sm" data-act="viewOrder" data-id="${x.order_id}" title="Apri vendita">🧾</button> ` : ''}<button class="btn sm" data-act="editCopy" data-id="${x.id}">✎</button></td></tr>`).join('')}
+    </tbody></table></div></div>` : ''}`;
+  queueImages(rows.map(r => r.c.id));
 }
 function lotForm(id){
   const l = id ? S.lots.get(id) : null;
@@ -1239,12 +1483,21 @@ function lotForm(id){
 /* ===================== GUADAGNI MENSILI ===================== */
 let EG = '';
 function monthly(game){
-  const M = new Map(); const get = m => M.get(m) || M.set(m, {m, spent: 0, bought: 0, earned: 0, sold: 0, margin: 0}).get(m);
+  const M = new Map(); const get = m => M.get(m) || M.set(m, {m, spent: 0, bought: 0, gross: 0, net: 0, fee: 0, ship: 0, sold: 0, margin: 0}).get(m);
   const okCard = id => !game || S.cards.get(id)?.game === game;
   for (const c of S.copies.values()){
     if (!okCard(c.card_id)) continue;
     if (c.buy_date && !c.lot_id){ const r = get(c.buy_date.slice(0, 7)); r.spent += (c.buy_price || 0) * c.qty; r.bought += c.qty; }
-    if (c.status === 'venduto' && c.sell_date){ const r = get(c.sell_date.slice(0, 7)); r.earned += c.sell_price || 0; r.sold += c.qty; if (!c.lot_id && c.buy_price != null) r.margin += (c.sell_price || 0) - c.buy_price * c.qty; }
+    if (c.status === 'venduto' && c.sell_date){
+      const r = get(c.sell_date.slice(0, 7)), n = netSell(c);
+      r.gross += c.sell_price || 0; r.net += n; r.sold += c.qty;
+      if (!c.lot_id && c.buy_price != null) r.margin += n - c.buy_price * c.qty;
+    }
+  }
+  for (const o of S.orders.values()){
+    const items = orderItems(o.id).filter(c => okCard(c.card_id)); if (!items.length || !o.sell_date) continue;
+    const k = oc(o), part = k.gross ? sum(items, c => c.sell_price) / k.gross : items.length / k.items.length;
+    const r = get(o.sell_date.slice(0, 7)); r.fee += (o.fee || 0) * part; r.ship += ((o.shipping_cost || 0) - (o.shipping_charged || 0)) * part;
   }
   for (const l of S.lots.values()){
     if (game && !lotCopies(l.id).some(c => okCard(c.card_id))) continue;
@@ -1256,33 +1509,79 @@ function barChart(rows){
   rows = [...rows].reverse().slice(-12);
   if (!rows.length) return '';
   const W = 760, H = 230, P = {l: 56, r: 10, t: 12, b: 34};
-  const mx = Math.max(...rows.flatMap(r => [r.spent, r.earned])) * 1.1 || 1;
-  const bw = (W - P.l - P.r) / rows.length, sy = v => H - P.b - v / mx * (H - P.t - P.b);
+  const mx = Math.max(...rows.flatMap(r => [r.spent, r.net])) * 1.1 || 1;
+  const bw = (W - P.l - P.r) / rows.length, sy = v => H - P.b - Math.max(0, v) / mx * (H - P.t - P.b);
   let g = '';
   for (let i = 0; i <= 4; i++){ const v = mx * i / 4, y = sy(v); g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y}" y2="${y}" stroke="#243044"/><text x="${P.l - 6}" y="${y + 4}" text-anchor="end" font-size="11" fill="#8d99ad">${EUR.format(v).replace(/,\d\d/, '')}</text>`; }
   rows.forEach((r, i) => {
     const x = P.l + i * bw, w = Math.min(22, bw * .34);
     g += `<rect x="${x + bw / 2 - w - 1}" y="${sy(r.spent)}" width="${w}" height="${H - P.b - sy(r.spent)}" rx="3" fill="#f0605d"><title>${fmonth(r.m)} · speso ${EUR.format(r.spent)}</title></rect>`;
-    g += `<rect x="${x + bw / 2 + 1}" y="${sy(r.earned)}" width="${w}" height="${H - P.b - sy(r.earned)}" rx="3" fill="#34c27b"><title>${fmonth(r.m)} · incassato ${EUR.format(r.earned)}</title></rect>`;
+    g += `<rect x="${x + bw / 2 + 1}" y="${sy(r.net)}" width="${w}" height="${H - P.b - sy(r.net)}" rx="3" fill="#34c27b"><title>${fmonth(r.m)} · incassato netto ${EUR.format(r.net)}</title></rect>`;
     const [y, mm] = r.m.split('-');
     g += `<text x="${x + bw / 2}" y="${H - 18}" text-anchor="middle" font-size="11" fill="#8d99ad">${MESI[+mm - 1].slice(0, 3)}</text><text x="${x + bw / 2}" y="${H - 5}" text-anchor="middle" font-size="10" fill="#6f7b8f">${y}</text>`;
   });
-  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}">${g}</svg><div class="legend"><span><i style="background:#f0605d"></i>Speso</span><span><i style="background:#34c27b"></i>Incassato</span></div></div>`;
+  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}">${g}</svg><div class="legend"><span><i style="background:#f0605d"></i>Speso</span><span><i style="background:#34c27b"></i>Incassato netto</span></div></div>`;
 }
 function pageEarnings(app){
   const rows = monthly(EG);
-  const T = {spent: sum(rows, r => r.spent), earned: sum(rows, r => r.earned), sold: sum(rows, r => r.sold), bought: sum(rows, r => r.bought), margin: sum(rows, r => r.margin)};
+  const T = {}; ['spent', 'gross', 'net', 'fee', 'ship', 'sold', 'bought', 'margin'].forEach(k => T[k] = sum(rows, r => r[k]));
   app.innerHTML = `
     <div class="crumbs"><a href="#/">Home</a> › <b>Guadagni mensili</b></div>
-    <div class="pagehead"><div class="grow"><h1>Guadagni mensili</h1><div class="muted">Spese (singole + lotti) per mese d'acquisto, incassi per mese di vendita.</div></div>
+    <div class="pagehead"><div class="grow"><h1>Guadagni mensili</h1><div class="muted">Spese (singole + lotti) per mese d'acquisto, incassi netti per mese di vendita.</div></div>
       <select class="inp" id="eg" style="width:auto">${opt('', EG, 'Tutti i giochi')}${IX.games.map(g => opt(g, EG)).join('')}</select></div>
-    <div class="stats"><div class="stat"><div class="l">Speso</div><div class="v">${eur(T.spent)}</div></div><div class="stat"><div class="l">Incassato</div><div class="v">${eur(T.earned)}</div></div>
-      <div class="stat"><div class="l">Saldo</div><div class="v">${signEur(T.earned - T.spent)}</div></div><div class="stat"><div class="l">Margine vendite singole</div><div class="v">${signEur(T.margin)}</div><div class="s">esclusi i lotti</div></div></div>
+    <div class="stats"><div class="stat"><div class="l">Speso</div><div class="v">${eur(T.spent)}</div></div>
+      <div class="stat"><div class="l">Incassato netto</div><div class="v">${eur(T.net)}</div><div class="s">lordo ${eur(T.gross)} · commissioni ${eur(T.fee)} · spedizioni ${eur(T.ship)}</div></div>
+      <div class="stat"><div class="l">Saldo</div><div class="v">${signEur(T.net - T.spent)}</div><div class="s">incassato netto − speso</div></div>
+      <div class="stat"><div class="l">Margine netto singole</div><div class="v">${signEur(T.margin)}</div><div class="s">esclusi i lotti</div></div></div>
     ${rows.length ? `<div class="panel"><h2>Ultimi 12 mesi</h2>${barChart(rows)}</div>` : ''}
-    <div class="panel flush">${rows.length ? `<div class="tw"><table class="t"><thead><tr><th>Mese</th><th class="right hide-m">Copie acquistate</th><th class="right">Speso</th><th class="right hide-m">Copie vendute</th><th class="right">Incassato</th><th class="right">Saldo</th><th class="right hide-m">Margine singole</th></tr></thead><tbody>
-      ${rows.map(r => `<tr><td class="nowrap"><b>${fmonth(r.m)}</b></td><td class="right hide-m">${r.bought}</td><td class="right">${eur(r.spent)}</td><td class="right hide-m">${r.sold}</td><td class="right">${eur(r.earned)}</td><td class="right">${signEur(r.earned - r.spent)}</td><td class="right hide-m">${signEur(r.margin)}</td></tr>`).join('')}
-    </tbody><tfoot><tr><td>Totale</td><td class="right hide-m">${T.bought}</td><td class="right">${eur(T.spent)}</td><td class="right hide-m">${T.sold}</td><td class="right">${eur(T.earned)}</td><td class="right">${signEur(T.earned - T.spent)}</td><td class="right hide-m">${signEur(T.margin)}</td></tr></tfoot></table></div>` : `<div class="empty">Nessun movimento con data.</div>`}</div>`;
+    <div class="panel flush">${rows.length ? `<div class="tw"><table class="t"><thead><tr><th>Mese</th><th class="right hide-m">Acquistate</th><th class="right">Speso</th><th class="right hide-m">Vendute</th><th class="right hide-m">Lordo</th><th class="right hide-m">Commiss.</th><th class="right hide-m">Spediz.</th><th class="right">Netto</th><th class="right">Saldo</th><th class="right hide-m">Margine singole</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td class="nowrap"><b>${fmonth(r.m)}</b></td><td class="right hide-m">${r.bought}</td><td class="right">${eur(r.spent)}</td><td class="right hide-m">${r.sold}</td><td class="right hide-m">${eur(r.gross)}</td><td class="right hide-m">${eur(r.fee)}</td><td class="right hide-m">${eur(r.ship)}</td><td class="right">${eur(r.net)}</td><td class="right">${signEur(r.net - r.spent)}</td><td class="right hide-m">${signEur(r.margin)}</td></tr>`).join('')}
+    </tbody><tfoot><tr><td>Totale</td><td class="right hide-m">${T.bought}</td><td class="right">${eur(T.spent)}</td><td class="right hide-m">${T.sold}</td><td class="right hide-m">${eur(T.gross)}</td><td class="right hide-m">${eur(T.fee)}</td><td class="right hide-m">${eur(T.ship)}</td><td class="right">${eur(T.net)}</td><td class="right">${signEur(T.net - T.spent)}</td><td class="right hide-m">${signEur(T.margin)}</td></tr></tfoot></table></div>` : `<div class="empty">Nessun movimento con data.</div>`}</div>`;
   $('#eg').onchange = e => { EG = e.target.value; render(); };
+}
+
+/* ===================== GIACENZE (carte ferme) ===================== */
+const STALE = {m: 0, game: '', sort: 'val'};
+function staleList(months, game){
+  const lim = new Date(); lim.setMonth(lim.getMonth() - months); const limS = isoLocal(lim), now = Date.now();
+  return [...S.copies.values()].filter(c => c.status !== 'venduto' && c.buy_date && c.buy_date <= limS)
+    .map(c => ({c, card: S.cards.get(c.card_id)})).filter(x => x.card && (!game || x.card.game === game))
+    .map(x => { const u = estUnit(x.card.id); x.days = Math.floor((now - dpt(x.c.buy_date)) / 864e5);
+      x.est = u != null ? u * x.c.qty : null; x.cost = x.c.lot_id || x.c.buy_price == null ? null : x.c.buy_price * x.c.qty; x.val = x.est ?? x.cost ?? 0; return x; });
+}
+const ageTxt = d => d >= 365 ? `${Math.floor(d / 365)} ${Math.floor(d / 365) === 1 ? 'anno' : 'anni'}${d % 365 >= 30 ? ' e ' + Math.floor(d % 365 / 30) + ' mesi' : ''}` : d >= 60 ? `${Math.floor(d / 30)} mesi` : `${d} giorni`;
+function pageStale(app){
+  const months = STALE.m || SET.stale || 6;
+  const list = staleList(months, STALE.game).sort(STALE.sort === 'age' ? (a, b) => b.days - a.days || b.val - a.val : (a, b) => b.val - a.val || b.days - a.days);
+  const noDate = sum([...S.copies.values()].filter(c => c.status !== 'venduto' && !c.buy_date), c => c.qty);
+  const capital = sum(list, x => x.cost || 0), est = sum(list, x => x.est || 0);
+  app.innerHTML = `
+    <div class="crumbs"><a href="#/">Home</a> › <b>Giacenze</b></div>
+    <div class="pagehead"><div class="grow"><h1>Carte ferme da tempo</h1><div class="muted">Copie disponibili acquistate da più di ${months} mesi: valuta se ribassarle o venderle in blocco.</div></div></div>
+    <div class="panel flush"><div class="panel-h filters">
+      <span class="small muted">Ferme da più di</span>
+      <div class="seg" id="sm">${[3, 6, 12, 24].map(v => `<button data-v="${v}" class="${months === v ? 'on' : ''}">${v < 12 ? v + ' mesi' : v / 12 + (v === 12 ? ' anno' : ' anni')}</button>`).join('')}</div>
+      <select class="inp" id="sg">${opt('', STALE.game, 'Tutti i giochi')}${IX.games.map(g => opt(g, STALE.game)).join('')}</select>
+      <div class="seg" id="ss"><button data-v="val" class="${STALE.sort === 'val' ? 'on' : ''}">Per valore</button><button data-v="age" class="${STALE.sort === 'age' ? 'on' : ''}">Più vecchie</button></div>
+    </div>
+    <div class="stats" style="padding:14px 16px 0;margin:0">
+      <div class="stat"><div class="l">Copie ferme</div><div class="v">${sum(list, x => x.c.qty)}</div><div class="s">${new Set(list.map(x => x.card.id)).size} carte diverse</div></div>
+      <div class="stat"><div class="l">Capitale fermo</div><div class="v">${eur(capital)}</div><div class="s">quanto le hai pagate (singole)</div></div>
+      <div class="stat"><div class="l">Valore stimato</div><div class="v">${est ? '≈ ' + eur(est) : '—'}</div><div class="s">ai tuoi prezzi medi di vendita</div></div>
+    </div>
+    ${list.length ? `<div class="tw" style="margin-top:14px"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th class="hide-m">Espansione</th><th></th><th>Q.tà</th><th class="hide-m">Acquistata</th><th>Ferma da</th><th class="right">Costo</th><th class="right">Stima</th><th></th></tr></thead><tbody>
+      ${list.slice(0, 300).map(({c, card, days, est, cost}) => `<tr><td class="tc">${thumbHtml(card)}</td><td><a class="cname" href="#/c/${card.id}">${esc(card.name)}</a>${card.rarity ? `<div class="small muted">${esc(card.rarity)}</div>` : ''}</td><td class="hide-m muted">${esc(card.expansion || '—')}</td>
+        <td>${condB(c.condition)} ${c.language ? `<span class="b lang">${esc(c.language)}</span>` : ''}</td><td>${c.qty}</td><td class="hide-m nowrap">${fdate(c.buy_date)}</td>
+        <td class="nowrap"><span class="b ${days >= 365 ? 'c-PL' : days >= 180 ? 'c-LP' : 'c-x'}">${ageTxt(days)}</span></td>
+        <td class="right">${c.lot_id ? `<a class="b lotb" href="#/lotto/${c.lot_id}">lotto</a>` : eur(cost)}</td><td class="right">${est != null ? eur(est) : '<span class="muted">—</span>'}</td>
+        <td class="acts"><button class="btn sm ok" data-act="sell" data-id="${c.id}">Vendi</button></td></tr>`).join('')}
+    </tbody></table></div>${list.length > 300 ? `<div class="small muted" style="padding:8px 16px">Mostrate le prime 300 righe.</div>` : ''}` : `<div class="empty">Nessuna carta ferma da più di ${months} mesi. 👍</div>`}
+    </div>
+    ${noDate ? `<div class="small muted">${noDate} copie disponibili non hanno data d'acquisto e non sono considerate qui.</div>` : ''}`;
+  $$('#sm button').forEach(b => b.onclick = () => { STALE.m = +b.dataset.v; render(); });
+  $$('#ss button').forEach(b => b.onclick = () => { STALE.sort = b.dataset.v; render(); });
+  $('#sg').onchange = e => { STALE.game = e.target.value; render(); };
+  queueImages(list.slice(0, 100).map(x => x.card.id));
 }
 
 /* ===================== IMPORT / EXPORT ===================== */
@@ -1460,7 +1759,7 @@ async function runImport(plan){
   });
 }
 function exportJSON(){
-  const data = {app: 'DSR Archive', version: 1, exported_at: new Date().toISOString(), cards: [...S.cards.values()].map(strip), lots: [...S.lots.values()].map(strip), copies: [...S.copies.values()].map(strip)};
+  const data = {app: 'DSR Archive', version: 1, exported_at: new Date().toISOString(), cards: [...S.cards.values()].map(strip), lots: [...S.lots.values()].map(strip), orders: [...S.orders.values()].map(strip), copies: [...S.copies.values()].map(strip), settings: SET};
   download(`dsr-archive-backup-${today()}.json`, JSON.stringify(data, null, 1), 'application/json');
 }
 function exportXLSX(){
@@ -1475,11 +1774,14 @@ function exportXLSX(){
       for (const x of copiesOf(c.id)) rows.push({'Nome Carta': c.name, 'Edizione': x.edition || '', 'Set/Espansione': c.expansion, 'Rarità': c.rarity, 'Condizione': x.condition || '', 'Lingua': x.language || '',
         'Quantità': x.qty, 'ID Lotto': x.lot_id ? lotRef.get(x.lot_id) || '' : '', 'Data Acquisto': fdate(x.buy_date).replace('—', ''), 'Prezzo Acquisto Unitario': x.buy_price ?? '',
         'Prezzo Acquisto Totale': x.buy_price != null ? round2(x.buy_price * x.qty) : '', 'Stato': x.status === 'venduto' ? 'Venduto' : 'Disponibile', 'Data Vendita': fdate(x.sell_date).replace('—', ''),
-        'Prezzo Vendita Totale': x.sell_price ?? '', 'Piattaforma': x.platform || '', 'Note': x.notes || ''});
+        'Prezzo Vendita Totale': x.sell_price ?? '', 'Ricavo Netto': x.status === 'venduto' && x.sell_price != null ? round2(netSell(x)) : '', 'Piattaforma': x.platform || '', 'Note': x.notes || ''});
     if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), g.replace(/[\\/?*[\]:]/g, '').slice(0, 31));
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lots.map(l => ({'ID Lotto': lotRef.get(l.id), 'Descrizione': l.description, 'Data': fdate(l.buy_date).replace('—', ''), 'Prezzo Totale': l.total_price}))
     .concat(lots.length ? [] : [{'ID Lotto': '', 'Descrizione': '', 'Data': '', 'Prezzo Totale': ''}])), 'Lotti');
+  const ords = [...S.orders.values()].sort((a, b) => (a.sell_date || '').localeCompare(b.sell_date || ''));
+  if (ords.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ords.map(o => { const k = oc(o); return {'Data': fdate(o.sell_date).replace('—', ''), 'Piattaforma': o.platform || '', 'Acquirente': o.buyer || '', 'Carte': k.qty,
+    'Articoli': round2(k.gross), 'Spedizione incassata': o.shipping_charged, 'Costo spedizione': o.shipping_cost, 'Commissione': o.fee, 'Netto': round2(k.net), 'Note': o.notes || ''}; })), 'Vendite');
   XLSX.writeFile(wb, `dsr-archive-${today()}.xlsx`);
 }
 async function importJSON(file){
@@ -1491,7 +1793,9 @@ async function importJSON(file){
     for (const c of j.cards){ const ex = IX.byKey.get(keyOf(c)); if (ex) remap.set(c.id, ex.id); else if (!S.cards.has(c.id)){ newCards.push(strip(c)); remap.set(c.id, c.id); } else remap.set(c.id, c.id); }
     await tx.insert('cards', newCards);
     await tx.insert('lots', (j.lots || []).filter(l => !S.lots.has(l.id)).map(strip));
-    await tx.insert('copies', j.copies.filter(c => !S.copies.has(c.id)).map(c => ({...strip(c), card_id: remap.get(c.card_id) || c.card_id})));
+    await tx.insert('orders', (j.orders || []).filter(o => !S.orders.has(o.id)).map(strip));
+    const okOrder = id => id && (S.orders.has(id));
+    await tx.insert('copies', j.copies.filter(c => !S.copies.has(c.id)).map(c => ({...strip(c), card_id: remap.get(c.card_id) || c.card_id, order_id: okOrder(c.order_id) ? c.order_id : null})));
   });
 }
 function pageData(app){
@@ -1567,13 +1871,13 @@ function showPlan(plan, fname){
   $('#impgo').onclick = async () => { $('#impgo').disabled = true; $('#impgo').textContent = 'Importazione…'; const ok = await runImport(plan); if (ok) location.hash = '#/collezione'; };
 }
 async function deleteAll(){
-  openModal('Elimina tutto', `<p style="margin-top:0">Verranno cancellate <b>${S.cards.size}</b> carte, <b>${S.copies.size}</b> righe di copie e <b>${S.lots.size}</b> lotti. Scarico prima un backup JSON e potrai comunque annullare con ↶.</p>
+  openModal('Elimina tutto', `<p style="margin-top:0">Verranno cancellate <b>${S.cards.size}</b> carte, <b>${S.copies.size}</b> righe di copie, <b>${S.lots.size}</b> lotti e <b>${S.orders.size}</b> vendite. Scarico prima un backup JSON e potrai comunque annullare con ↶.</p>
     <label class="f">Scrivi <b>ELIMINA</b> per confermare</label><input class="inp" id="delc"><div class="mfoot"><button class="btn" data-c>Annulla</button><button class="btn dan fill" id="delgo" disabled>Elimina tutto</button></div>`, {onMount: m => {
     $('[data-c]', m).onclick = closeModal;
     $('#delc', m).oninput = e => { $('#delgo', m).disabled = e.target.value.trim().toUpperCase() !== 'ELIMINA'; };
     $('#delgo', m).onclick = async () => {
       exportJSON(); closeModal();
-      await commit('Archivio svuotato', async tx => { await tx.remove('copies', [...S.copies.keys()]); await tx.remove('lots', [...S.lots.keys()]); await tx.remove('cards', [...S.cards.keys()]); });
+      await commit('Archivio svuotato', async tx => { await tx.remove('copies', [...S.copies.keys()]); await tx.remove('orders', [...S.orders.keys()]); await tx.remove('lots', [...S.lots.keys()]); await tx.remove('cards', [...S.cards.keys()]); });
     };
   }});
 }
@@ -1599,7 +1903,10 @@ const ACT = {
     });
     if (!S.cards.has(c.id)) location.hash = '#/collezione';
   },
-  sell: d => sellForm(d.id),
+  sell: d => orderForm({items: [d.id]}),
+  newOrder: () => orderForm(),
+  upgrade: () => upgradeModal(),
+  viewOrder: d => orderView(d.id),
   changeImg: d => imageForm(d.id),
   addLot: () => lotForm(),
   editLot: d => lotForm(d.id),
@@ -1631,15 +1938,41 @@ document.addEventListener('click', e => {
   e.preventDefault(); ACT[b.dataset.act]?.(b.dataset, b, e);
 });
 
+function feesModal(after){
+  openModal('Commissioni e spedizioni', `<form id="fsf">
+    <p class="muted small" style="margin-top:0">Servono a calcolare quanto ti resta davvero da ogni vendita. La commissione viene proposta in automatico nel modulo di vendita e puoi sempre correggerla a mano.</p>
+    <div class="tw"><table class="t"><thead><tr><th>Piattaforma</th><th>% sugli articoli</th><th>Fisso per ordine €</th></tr></thead><tbody>
+      ${Object.entries(SET.fees).map(([p, v]) => `<tr><td><b>${esc(p)}</b></td><td><input class="inp" style="max-width:110px" data-pct="${esc(p)}" inputmode="decimal" value="${fmtIn(v.pct)}" placeholder="0"></td><td><input class="inp" style="max-width:110px" data-fix="${esc(p)}" inputmode="decimal" value="${fmtIn(v.fixed)}" placeholder="0,00"></td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="small muted" style="margin:6px 0 14px">Cardmarket parte dal 5% (venditore privato). Controlla le tariffe del tuo account CardTrader e delle altre piattaforme.</div>
+    <div class="fg">
+      <div><label class="f">Tuo costo medio spedizione + imballaggio €</label><input class="inp" name="sk" inputmode="decimal" value="${fmtIn(SET.shipCost)}" placeholder="es. 1,50"></div>
+      <div><label class="f">Spedizione che fai pagare di solito €</label><input class="inp" name="sc" inputmode="decimal" value="${fmtIn(SET.shipCharged)}" placeholder="es. 1,30"></div>
+      <div><label class="f">Carte “ferme” dopo (mesi)</label><input class="inp" name="st" type="number" min="1" value="${SET.stale || 6}"></div>
+    </div>
+    <div class="mfoot"><button type="button" class="btn" data-c>Annulla</button><button class="btn pri">Salva</button></div></form>`, {wide: true, onMount: m => {
+    $('[data-c]', m).onclick = () => { closeModal(); after && after(); };
+    $('#fsf', m).onsubmit = async e => {
+      e.preventDefault(); const E = n => e.target.elements[n];
+      $$('[data-pct]', m).forEach(i => { SET.fees[i.dataset.pct].pct = num(i.value) || 0; });
+      $$('[data-fix]', m).forEach(i => { SET.fees[i.dataset.fix].fixed = num(i.value) || 0; });
+      SET.shipCost = num(E('sk').value) || 0; SET.shipCharged = num(E('sc').value) || 0; SET.stale = Math.max(1, parseInt(E('st').value) || 6);
+      await saveSettings(); closeModal(); toast('Impostazioni salvate'); render(); after && after();
+    };
+  }});
+}
 function settingsModal(){
   const cfg = getCfg();
   openModal('Impostazioni', `
     <dl class="info"><dt>Account</dt><dd>${esc(S.user.email || '—')}</dd><dt>Archiviazione</dt><dd>${S.mode === 'local' ? 'Solo questo browser' : 'Supabase'}</dd>
     ${S.mode === 'supabase' ? `<dt>Progetto</dt><dd class="small">${esc(cfg?.url || '')}</dd>` : ''}
-    <dt>Contenuto</dt><dd>${S.cards.size} carte · ${S.copies.size} righe · ${S.lots.size} lotti</dd></dl>
+    <dt>Contenuto</dt><dd>${S.cards.size} carte · ${S.copies.size} righe · ${S.lots.size} lotti · ${S.orders.size} vendite</dd>
+    <dt>Commissioni</dt><dd>${Object.entries(SET.fees).filter(([, v]) => v.pct || v.fixed).map(([p, v]) => `${esc(p)} ${String(v.pct).replace('.', ',')}%`).join(' · ') || 'nessuna'} · spedizione ${eur(SET.shipCost)}</dd></dl>
+    <div style="margin-top:12px"><button class="btn" id="fees">💶 Commissioni e spedizioni…</button></div>
     <div class="mfoot">${cfg?.fixed ? '' : '<button class="btn dan" id="chg">Cambia collegamento</button>'}<button class="btn" id="rel">Ricarica dati</button><button class="btn pri" id="out">${S.mode === 'local' ? 'Esci' : 'Esci dall\'account'}</button></div>`,
   {onMount: m => {
-    $('#rel', m).onclick = async () => { closeModal(); await loadAll(); render(); toast('Dati ricaricati'); };
+    $('#fees', m).onclick = () => feesModal();
+    $('#rel', m).onclick = async () => { closeModal(); await loadAll(); await loadSettings(); render(); toast('Dati ricaricati'); };
     $('#out', m).onclick = async () => { closeModal(); if (S.mode === 'supabase') await sb.auth.signOut(); S.user = null; undoStack.length = 0; if (S.mode === 'local') setCfg(null); render(); };
     $('#chg', m) && ($('#chg', m).onclick = async () => { closeModal(); if (S.mode === 'supabase') await sb.auth.signOut(); setCfg(null); S.user = null; sb = null; undoStack.length = 0; render(); });
   }});
@@ -1693,7 +2026,7 @@ function renderAuth(){
 async function afterLogin(user){
   S.user = user;
   $('#root').innerHTML = `<div class="auth"><div class="panel empty">Caricamento archivio…</div></div>`;
-  try { await loadAll(); }
+  try { await loadAll(); await loadSettings(); }
   catch (e){
     console.error(e);
     const hint = /relation|does not exist|schema cache/i.test(e.message) ? 'Le tabelle non esistono ancora: esegui lo script schema.sql nel SQL Editor di Supabase.' : e.message;
