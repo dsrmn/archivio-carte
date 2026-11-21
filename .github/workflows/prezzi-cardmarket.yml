@@ -1,0 +1,27 @@
+name: Prezzi Cardmarket
+
+# Ogni notte scarica catalogo e prezzi pubblici di Cardmarket e li pubblica
+# nel ramo "cm-data" (sovrascritto ogni volta, così il repository non cresce).
+on:
+  schedule:
+    - cron: "17 5 * * *"   # circa le 6-7 di mattina in Italia
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prezzi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scarica catalogo e prezzi
+        run: python3 scripts/cardmarket_prezzi.py out
+      - name: Pubblica nel ramo cm-data
+        run: |
+          cd out
+          git init -q
+          git checkout -q -b cm-data
+          git add .
+          git -c user.name="DSR Archive bot" -c user.email="actions@github.com" commit -qm "Prezzi Cardmarket $(date -u +%F)"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" cm-data
