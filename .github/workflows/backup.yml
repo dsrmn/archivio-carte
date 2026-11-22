@@ -1,0 +1,57 @@
+name: Backup settimanale
+
+# Ogni lunedì salva una copia cifrata di tutto l'archivio nel ramo "backup".
+# Servono due secret (Settings → Secrets and variables → Actions):
+#   SUPABASE_SERVICE_KEY  la chiave "service_role" del progetto Supabase
+#   BACKUP_PASSWORD       una password a tua scelta: serve per riaprire i backup
+# (SUPABASE_URL c'è già, la usa anche "Tieni sveglio Supabase").
+on:
+  schedule:
+    - cron: "41 3 * * 1"   # lunedì notte
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      BACKUP_PASSWORD: ${{ secrets.BACKUP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Controlla la configurazione
+        id: cfg
+        run: |
+          if [ -z "$SUPABASE_SERVICE_KEY" ] || [ -z "$BACKUP_PASSWORD" ] || [ -z "$SUPABASE_URL" ]; then
+            echo "::warning::Backup non configurato: aggiungi i secret SUPABASE_SERVICE_KEY e BACKUP_PASSWORD (e SUPABASE_URL)."
+            echo "ok=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=yes" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Scarica i dati da Supabase
+        if: steps.cfg.outputs.ok == 'yes'
+        run: python3 scripts/backup.py backup.json
+      - name: Comprimi e cifra
+        if: steps.cfg.outputs.ok == 'yes'
+        run: |
+          gzip -9 backup.json
+          NAME="dsr-archive-$(date -u +%F).json.gz.enc"
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -md sha256 -salt -in backup.json.gz -out "$NAME" -pass env:BACKUP_PASSWORD
+          echo "NAME=$NAME" >> "$GITHUB_ENV"
+      - name: Salva nel ramo backup
+        if: steps.cfg.outputs.ok == 'yes'
+        run: |
+          REPO="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          if git clone -q --depth 1 --branch backup "$REPO" bk 2>/dev/null; then :; else
+            mkdir bk && cd bk && git init -q && git checkout -q -b backup && git remote add origin "$REPO" && cd ..
+          fi
+          mv "$NAME" bk/
+          cd bk
+          ls dsr-archive-*.json.gz.enc | sort | head -n -26 | xargs -r git rm -q   # tiene gli ultimi 26 (circa 6 mesi)
+          printf '# Backup DSR Archive\n\nFile cifrati: si riaprono dalla web-app (Importa / Esporta → Ripristina backup) con la password del secret BACKUP_PASSWORD.\n' > README.md
+          git add -A
+          git -c user.name="DSR Archive bot" -c user.email="actions@github.com" commit -qm "Backup $(date -u +%F)"
+          git push -q origin backup

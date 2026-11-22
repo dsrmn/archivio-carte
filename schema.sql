@@ -126,3 +126,9 @@ create policy settings_own on public.settings for all to authenticated
 -- Collegamento delle carte al catalogo Cardmarket
 -- =============================================================
 alter table public.cards add column if not exists cm_id bigint;   -- idProduct Cardmarket (-1 = nessuna corrispondenza)
+
+-- =============================================================
+-- Prezzo di vendita richiesto per copia
+-- =============================================================
+alter table public.copies add column if not exists ask_price numeric(12,2);   -- in vendita a (per copia)
+alter table public.copies add column if not exists ask_date  date;            -- da quando è in vendita a quel prezzo

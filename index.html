@@ -184,7 +184,15 @@ a.panel.banner:hover{text-decoration:none;border-color:var(--orange)}
 .tst.ok{background:#1d5c3d;border-color:#2c7a52}
 @media (max-width:760px){.orow{flex-wrap:wrap}.orow .grow{flex-basis:calc(100% - 50px)}.orow .oq,.orow .op{flex:1}}
 
+/* selezione multipla */
+th.ck,td.ck{width:30px;padding-right:0}.ck input{width:16px;height:16px;cursor:pointer;accent-color:var(--blue)}
+.t tbody tr.sel{background:#16284a !important}
+.selbar{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--card2);border-top:1px solid var(--blue);box-shadow:0 -6px 20px rgba(0,0,0,.4)}
+.selin{max-width:1240px;margin:0 auto;padding:10px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#app:has(#selbar){padding-bottom:80px}
 /* Cardmarket */
+a.askl{color:inherit;text-decoration:none;display:inline-block;padding:2px 4px;border-radius:4px}a.askl:hover{background:var(--hover)}
+.ctbox{margin-top:12px;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--card2)}
 a.btn.cmlink{border-color:#1f4f8f;color:#8fb4ff}a.btn.cmlink:hover{background:#14233d}
 .cmp h3{font-size:15px}.cmgrid{display:flex;gap:10px 28px;flex-wrap:wrap;margin-top:12px}.cmgrid div{display:flex;flex-direction:column}.cmgrid span{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}.cmgrid b{font-size:20px;font-variant-numeric:tabular-nums}
 .cml{max-height:55vh;overflow:auto;border:1px solid var(--line);border-radius:6px}.cmi{display:flex;gap:12px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer}.cmi:hover{background:var(--hover)}.cmi:last-child{border-bottom:0}
@@ -348,9 +356,9 @@ const LS = {
 };
 const chunk = (a, n) => { const r = []; for (let i = 0; i < a.length; i += n) r.push(a.slice(i, i+n)); return r; };
 const strip = r => { const o = {...r}; delete o.user_id; return o; };
-const dbRow = r => { const drop = [S.noOrders && 'order_id', S.noCmId && 'cm_id'].filter(k => k && k in r); if (!drop.length) return r; const o = {...r}; drop.forEach(k => delete o[k]); return o; };
+const dbRow = r => { const drop = [S.noOrders && 'order_id', S.noCmId && 'cm_id', S.noAsk && 'ask_price', S.noAsk && 'ask_date'].filter(k => k && k in r); if (!drop.length) return r; const o = {...r}; drop.forEach(k => delete o[k]); return o; };
 /** se il database non ha ancora una colonna nuova, la segna come mancante e riprova senza */
-const colMissing = e => { const m = /'(cm_id|order_id)' column/.exec(e?.message || ''); if (!m) return false; if (m[1] === 'cm_id') S.noCmId = true; else S.noOrders = true; return true; };
+const colMissing = e => { const m = /'(cm_id|order_id|ask_price|ask_date)' column/.exec(e?.message || ''); if (!m) return false; if (/^ask/.test(m[1])) S.noAsk = true; else if (m[1] === 'cm_id') S.noCmId = true; else S.noOrders = true; return true; };
 
 const DB = {
   async fetchAll(t){
@@ -385,7 +393,7 @@ const DB = {
 function normRow(t, r){
   const o = {...r};
   if (t === 'orders'){ ['shipping_charged', 'shipping_cost', 'fee'].forEach(k => o[k] = Number(o[k]) || 0); }
-  if (t === 'copies'){ o.order_id = o.order_id ?? null; o.qty = Number(o.qty) || 1; o.buy_price = o.buy_price == null ? null : Number(o.buy_price); o.sell_price = o.sell_price == null ? null : Number(o.sell_price); }
+  if (t === 'copies'){ o.order_id = o.order_id ?? null; o.ask_price = o.ask_price == null ? null : Number(o.ask_price); o.qty = Number(o.qty) || 1; o.buy_price = o.buy_price == null ? null : Number(o.buy_price); o.sell_price = o.sell_price == null ? null : Number(o.sell_price); }
   if (t === 'lots') o.total_price = Number(o.total_price) || 0;
   return o;
 }
@@ -401,6 +409,7 @@ async function loadAll(){
       S[t] = new Map(rows.map(r => [r.id, normRow(t, r)]));
     }
     S.noCmId = S.mode === 'supabase' && rows0(S.cards) && !('cm_id' in rows0(S.cards));
+    S.noAsk = S.mode === 'supabase' && rows0(S.copies) && !('ask_price' in rows0(S.copies));
   } finally { busy(false); }
 }
 
@@ -524,6 +533,28 @@ function cardStats(id){
   };
 }
 const unitSell = c => c.sell_price != null ? c.sell_price / c.qty : null;
+const askDays = c => c.ask_date ? Math.floor((Date.now() - new Date(c.ask_date + 'T12:00:00')) / 864e5) : null;
+const askCell = x => x.ask_price == null ? '<span class="muted">—</span>' : `<b>${eur(x.ask_price)}</b>${x.qty > 1 ? ' <span class="small muted">cad.</span>' : ''}${askDays(x) != null ? `<div class="small muted">${askDays(x) < 1 ? 'da oggi' : 'da ' + ageTxt(askDays(x))}</div>` : ''}`;
+function askForm(ids){
+  ids = [].concat(ids).filter(id => S.copies.get(id)?.status !== 'venduto'); if (!ids.length) return;
+  if (S.noAsk){ upgradeModal(); return; }
+  const first = S.copies.get(ids[0]), c = S.cards.get(first.card_id), same = ids.every(id => S.copies.get(id).ask_price === first.ask_price);
+  openModal(ids.length === 1 ? `Prezzo di vendita · ${c.name}` : `Prezzo di vendita · ${ids.length} righe`, `<form id="askf">
+    <label class="f">In vendita a (prezzo per copia) €</label><input class="inp" name="p" inputmode="decimal" value="${same && first.ask_price != null ? fmtIn(first.ask_price) : ''}" placeholder="0,00" autofocus>
+    <div class="small muted" style="margin-top:6px">Lascia vuoto per togliere la carta dalla vendita.${ids.length === 1 && mktUnit(c, first) != null ? ` Prezzo di mercato: ${eur(mktUnit(c, first))}.` : ''}</div>
+    <div class="mfoot"><button type="button" class="btn" data-c>Annulla</button><button class="btn pri">Salva</button></div></form>`, {onMount: m => {
+    $('[data-c]', m).onclick = closeModal;
+    $('#askf', m).onsubmit = async e => {
+      e.preventDefault(); const v = num(e.target.elements.p.value);
+      closeModal();
+      await commit(v == null ? 'Tolta dalla vendita' : `In vendita a ${eur(v)}`, async tx => {
+        const keep = ids.filter(id => S.copies.get(id).ask_price === v && v != null), chg = ids.filter(id => !keep.includes(id));
+        await tx.update('copies', chg, {ask_price: v == null ? null : round2(v), ask_date: v == null ? null : today()});
+        for (const id of chg) await mergeTwin(tx, id);
+      });
+    };
+  }});
+}
 function findCard(game, expansion, name, rarity){ return IX.byKey.get(keyOf({game, expansion, name, rarity})); }
 async function ensureCard(tx, d){
   const ex = S.cards.size && [...S.cards.values()].find(c => keyOf(c) === keyOf(d));
@@ -534,7 +565,7 @@ async function ensureCard(tx, d){
 }
 const sameAvail = (a, b) => a.card_id === b.card_id && a.status !== 'venduto' && (a.lot_id || null) === (b.lot_id || null) &&
   (a.condition || '') === (b.condition || '') && (a.edition || '') === (b.edition || '') && (a.language || '') === (b.language || '') &&
-  (a.buy_price ?? null) === (b.buy_price ?? null) && (a.buy_date || null) === (b.buy_date || null);
+  (a.buy_price ?? null) === (b.buy_price ?? null) && (a.buy_date || null) === (b.buy_date || null) && (a.ask_price ?? null) === (b.ask_price ?? null);
 async function addCopy(tx, cp){
   const twin = [...S.copies.values()].find(c => c.id !== cp.id && sameAvail(c, cp) && (c.notes || '') === (cp.notes || ''));
   if (twin) await tx.update('copies', twin.id, {qty: twin.qty + cp.qty});
@@ -1119,7 +1150,7 @@ function shell(){
     ${nav('#/guadagni', 'Guadagni', p0 === 'guadagni')}
     ${nav('#/dati', 'Importa / Esporta', p0 === 'dati')}
   </div></nav></header>
-  ${S.noOrders || S.noCmId ? `<div class="upg"><div>⚙️ Per attivare <b>${S.noOrders ? 'vendite, commissioni e spedizioni' : 'il collegamento manuale delle carte a Cardmarket'}</b> serve un piccolo aggiornamento del database. <a href="#" data-act="upgrade">Come si fa</a></div></div>` : ''}
+  ${S.noOrders || S.noCmId || S.noAsk ? `<div class="upg"><div>⚙️ Per attivare <b>${S.noOrders ? 'vendite, commissioni e spedizioni' : S.noCmId ? 'il collegamento manuale delle carte a Cardmarket' : 'il prezzo di vendita richiesto'}</b> serve un piccolo aggiornamento del database. <a href="#" data-act="upgrade">Come si fa</a></div></div>` : ''}
   <main id="app"></main>`;
 }
 let lastShellKey = '';
@@ -1153,7 +1184,7 @@ function render(){
   } catch (e){ console.error(e); app.innerHTML = `<div class="panel">Errore di visualizzazione: ${esc(e.message)}</div>`; }
   cmAutoload();
 }
-window.addEventListener('hashchange', () => { window.scrollTo(0, 0); render(); });
+window.addEventListener('hashchange', () => { window.scrollTo(0, 0); $('#selbar')?.remove(); render(); });
 
 /* ===================== HOME ===================== */
 function totals(game){
@@ -1259,7 +1290,63 @@ function pageExpansion(app, game, exp){
 }
 
 /* ===================== COLLEZIONE ===================== */
-const F = {game: '', st: 'disp', q: '', sort: 'name', dir: 1, p: 0};
+const F = {game: '', st: 'disp', ask: '', q: '', sort: 'name', dir: 1, p: 0};
+const SEL = new Set();   // carte selezionate nella Collezione
+const selAvail = () => [...SEL].flatMap(id => copiesOf(id).filter(x => x.status !== 'venduto'));
+function drawSelBar(){
+  let bar = $('#selbar');
+  if (!SEL.size || !$('#ctab')){ bar && bar.remove(); return; }
+  if (!bar){ bar = document.createElement('div'); bar.id = 'selbar'; bar.className = 'selbar'; $('#app').appendChild(bar); }
+  const av = selAvail(), q = sum(av, x => x.qty);
+  bar.innerHTML = `<div class="selin"><b>${SEL.size} ${SEL.size === 1 ? 'carta selezionata' : 'carte selezionate'}</b><span class="small muted">${q} ${q === 1 ? 'copia disponibile' : 'copie disponibili'}</span><div class="grow"></div>
+    <button class="btn sm ok" data-act="selSell" ${q ? '' : 'disabled'}>€ Vendi</button><button class="btn sm" data-act="selAsk" ${q ? '' : 'disabled'}>Metti in vendita a…</button><button class="btn sm" data-act="selLot" ${q ? '' : 'disabled'}>Sposta in un lotto</button>
+    <button class="btn sm" data-act="selLang" ${q ? '' : 'disabled'}>Lingua</button><button class="btn sm" data-act="selCond" ${q ? '' : 'disabled'}>Condizione</button><button class="btn sm dan" data-act="selDel">Elimina</button><button class="btn sm" data-act="selNone" title="Deseleziona">✕</button></div>`;
+}
+function selFieldForm(field){
+  const av = selAvail(); if (!av.length) return;
+  const isLang = field === 'language';
+  openModal(isLang ? 'Cambia lingua' : 'Cambia condizione', `<form id="sff"><label class="f">${isLang ? 'Lingua' : 'Condizione'} per ${sum(av, x => x.qty)} copie disponibili</label>
+    <select class="inp" name="v">${isLang ? langOpts('') : CONDS.map(k => opt(k, 'NM', `${k} – ${COND_LBL[k]}`)).join('')}</select>
+    <div class="mfoot"><button type="button" class="btn" data-c>Annulla</button><button class="btn pri">Applica</button></div></form>`, {onMount: m => {
+    $('[data-c]', m).onclick = closeModal;
+    $('#sff', m).onsubmit = async e => {
+      e.preventDefault(); const v = e.target.elements.v.value; closeModal();
+      const ok = await commit(`${isLang ? 'Lingua' : 'Condizione'} ${v} per ${sum(av, x => x.qty)} copie`, async tx => {
+        const ids = av.map(x => x.id); await tx.update('copies', ids, {[field]: v}); for (const id of ids) await mergeTwin(tx, id);
+      });
+      if (ok){ SEL.clear(); render(); }
+    };
+  }});
+}
+function selLotForm(){
+  const av = selAvail(); if (!av.length) return;
+  const singlesCost = round2(sum(av.filter(x => !x.lot_id && x.buy_price != null), x => x.buy_price * x.qty));
+  const lots = [...S.lots.values()].sort((a, b) => (b.buy_date || '').localeCompare(a.buy_date || ''));
+  openModal('Sposta in un lotto', `<form id="slf">
+    <p class="muted small" style="margin-top:0">${sum(av, x => x.qty)} copie disponibili${singlesCost ? `, di cui carte singole pagate ${eur(singlesCost)}` : ''}. Nel lotto il costo diventa condiviso.</p>
+    <div class="seg" id="slm" style="margin-bottom:12px"><button type="button" data-v="new" class="on">Nuovo lotto</button>${lots.length ? '<button type="button" data-v="old">Lotto esistente</button>' : ''}</div>
+    <div id="slnew" class="fg"><div class="full"><label class="f">Descrizione</label><input class="inp" name="d" placeholder="es. Lotto Blackwing"></div>
+      <div><label class="f">Data</label><input class="inp" type="date" name="dt" value="${today()}"></div><div><label class="f">Prezzo totale €</label><input class="inp" name="p" inputmode="decimal" value="${fmtIn(singlesCost)}"></div></div>
+    <div id="slold" hidden>${lots.length ? `<label class="f">Lotto</label><select class="inp" name="lot">${lots.map(l => opt(l.id, '', `${fdate(l.buy_date)} · ${l.description} (${eur(l.total_price)})`)).join('')}</select>
+      ${singlesCost ? `<label class="small" style="display:block;margin-top:8px"><input type="checkbox" name="add" checked> aggiungi il costo delle carte singole (${eur(singlesCost)}) al prezzo del lotto</label>` : ''}` : ''}</div>
+    <div class="mfoot"><button type="button" class="btn" data-c>Annulla</button><button class="btn pri">Sposta</button></div></form>`, {onMount: m => {
+    let mode = 'new';
+    $('[data-c]', m).onclick = closeModal;
+    $$('#slm button', m).forEach(b => b.onclick = () => { mode = b.dataset.v; $$('#slm button', m).forEach(x => x.classList.toggle('on', x === b)); $('#slnew', m).hidden = mode !== 'new'; $('#slold', m).hidden = mode !== 'old'; });
+    $('#slf', m).onsubmit = async e => {
+      e.preventDefault(); const E = n => e.target.elements[n];
+      if (mode === 'new' && !clean(E('d').value)){ toast('Scrivi una descrizione per il lotto', 'err'); E('d').focus(); return; }
+      closeModal();
+      let lotId = mode === 'new' ? uid() : E('lot').value;
+      const ok = await commit(`${sum(av, x => x.qty)} copie spostate in un lotto`, async tx => {
+        if (mode === 'new') await tx.insert('lots', {id: lotId, description: clean(E('d').value), buy_date: E('dt').value || null, total_price: round2(num(E('p').value) || 0)});
+        else if (E('add')?.checked && singlesCost) await tx.update('lots', lotId, {total_price: round2(S.lots.get(lotId).total_price + singlesCost)});
+        const ids = av.map(x => x.id); await tx.update('copies', ids, {lot_id: lotId, buy_price: null}); for (const id of ids) await mergeTwin(tx, id);
+      });
+      if (ok){ SEL.clear(); location.hash = '#/lotto/' + lotId; }
+    };
+  }});
+}
 const PAGE = 100;
 function pageCollection(app){
   app.innerHTML = `
@@ -1267,11 +1354,13 @@ function pageCollection(app){
     <div class="pagehead"><div class="grow"><h1>Collezione</h1></div><button class="btn pri" data-act="addCard">＋ Aggiungi carta</button></div>
     <div class="panel flush"><div class="panel-h filters">
       <select class="inp" id="fgame">${opt('', F.game, 'Tutti i giochi')}${IX.games.map(g => opt(g, F.game)).join('')}</select>
+      <select class="inp" id="fask">${opt('', F.ask, 'In vendita e non')}${opt('si', F.ask, 'Solo in vendita')}${opt('no', F.ask, 'Non ancora in vendita')}</select>
       <div class="seg" id="fst">${[['disp', 'Disponibili'], ['vend', 'Vendute'], ['all', 'Tutte']].map(([v, l]) => `<button data-v="${v}" class="${F.st === v ? 'on' : ''}">${l}</button>`).join('')}</div>
       <input class="inp grow" id="fq" placeholder="Cerca nome, espansione, rarità…" value="${esc(F.q)}" style="min-width:180px">
       <span class="muted small" id="fcount"></span>
     </div><div id="ctab"></div></div>`;
   $('#fgame').onchange = e => { F.game = e.target.value; F.p = 0; drawColl(); };
+  $('#fask').onchange = e => { F.ask = e.target.value; F.p = 0; drawColl(); };
   $$('#fst button').forEach(b => b.onclick = () => { F.st = b.dataset.v; F.p = 0; $$('#fst button').forEach(x => x.classList.toggle('on', x === b)); drawColl(); });
   let t; $('#fq').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { F.q = e.target.value; F.p = 0; drawColl(); }, 200); });
   drawColl();
@@ -1280,24 +1369,30 @@ function drawColl(){
   const q = fold(F.q);
   let rows = [...S.cards.values()].filter(c => (!F.game || c.game === F.game) && (!q || fold(`${c.name} ${c.expansion} ${c.rarity}`).includes(q)))
     .map(c => ({c, st: cardStats(c.id)}))
-        .filter(x => F.st === 'all' ? true : F.st === 'disp' ? x.st.avail > 0 : x.st.sold > 0);
+        .filter(x => F.st === 'all' ? true : F.st === 'disp' ? x.st.avail > 0 : x.st.sold > 0)
+    .map(x => { const av = copiesOf(x.c.id).filter(y => y.status !== 'venduto'); const as = av.filter(y => y.ask_price != null); x.ask = as.length ? Math.min(...as.map(y => y.ask_price)) : null; x.askN = sum(as, y => y.qty); x.noAskN = sum(av, y => y.qty) - x.askN; return x; })
+    .filter(x => !F.ask || (F.ask === 'si' ? x.askN > 0 : x.noAskN > 0));
   const val = {name: x => x.c.name.toLowerCase(), exp: x => x.c.expansion.toLowerCase(), rar: x => x.c.rarity.toLowerCase(), game: x => x.c.game,
-    avail: x => x.st.avail, sold: x => x.st.sold, buy: x => x.st.avgBuy ?? -1, sell: x => x.st.avgSell ?? -1, mkt: x => mktPrice(cmFor(x.c)) ?? -1}[F.sort];
+    avail: x => x.st.avail, sold: x => x.st.sold, buy: x => x.st.avgBuy ?? -1, sell: x => x.st.avgSell ?? -1, mkt: x => mktPrice(cmFor(x.c)) ?? -1, ask: x => x.ask ?? -1}[F.sort];
   rows.sort((a, b) => { const A = val(a), B = val(b); return (A < B ? -1 : A > B ? 1 : a.c.name.localeCompare(b.c.name)) * F.dir; });
   const pages = Math.max(1, Math.ceil(rows.length / PAGE)); F.p = Math.min(F.p, pages - 1);
   const slice = rows.slice(F.p * PAGE, F.p * PAGE + PAGE);
   $('#fcount').textContent = `${rows.length} carte · ${sum(rows, x => F.st === 'vend' ? x.st.sold : x.st.avail)} copie`;
   const th = (k, l, cls = '') => `<th class="sortable ${cls}" data-sort="${k}">${l}${F.sort === k ? (F.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
-  $('#ctab').innerHTML = !slice.length ? `<div class="empty">Nessuna carta trovata.</div>` : `<div class="tw"><table class="t"><thead><tr><th class="tc"></th>
+  $('#ctab').innerHTML = !slice.length ? `<div class="empty">Nessuna carta trovata.</div>` : `<div class="tw"><table class="t"><thead><tr><th class="ck"><input type="checkbox" id="ckall" title="Seleziona tutta la pagina" ${slice.length && slice.every(x => SEL.has(x.c.id)) ? 'checked' : ''}></th><th class="tc"></th>
     ${th('name', 'Carta')}${th('exp', 'Espansione', 'hide-m')}${th('rar', 'Rarità')}${F.game ? '' : th('game', 'Gioco', 'hide-m')}<th class="hide-m">Condizioni</th>
-    ${th('avail', 'Disp.', 'right')}${th('sold', 'Vend.', 'right')}${th('buy', 'Acq. medio', 'right hide-m')}${th('sell', 'Vend. medio', 'right hide-m')}${th('mkt', 'Mercato', 'right')}</tr></thead><tbody>
-    ${slice.map(({c, st}) => `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${esc(c.name)}</a></td><td class="hide-m muted">${esc(c.expansion || '—')}</td><td>${c.rarity ? `<span class="b rar">${esc(c.rarity)}</span>` : ''}</td>
+    ${th('avail', 'Disp.', 'right')}${th('sold', 'Vend.', 'right')}${th('buy', 'Acq. medio', 'right hide-m')}${th('sell', 'Vend. medio', 'right hide-m')}${th('mkt', 'Mercato', 'right hide-m')}${th('ask', 'In vendita a', 'right')}</tr></thead><tbody>
+    ${slice.map(({c, st, ask, askN}) => `<tr class="${SEL.has(c.id) ? 'sel' : ''}"><td class="ck"><input type="checkbox" data-ck="${c.id}" ${SEL.has(c.id) ? 'checked' : ''}></td><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${esc(c.name)}</a></td><td class="hide-m muted">${esc(c.expansion || '—')}</td><td>${c.rarity ? `<span class="b rar">${esc(c.rarity)}</span>` : ''}</td>
       ${F.game ? '' : `<td class="hide-m">${esc(c.game)}</td>`}<td class="hide-m">${st.conds.map(condB).join(' ')}</td><td class="right"><b>${st.avail}</b></td><td class="right">${st.sold}</td>
-      <td class="right hide-m">${eur(st.avgBuy)}</td><td class="right hide-m">${eur(st.avgSell)}</td><td class="right nowrap">${mktCell(c)}</td></tr>`).join('')}
+      <td class="right hide-m">${eur(st.avgBuy)}</td><td class="right hide-m">${eur(st.avgSell)}</td><td class="right nowrap hide-m">${mktCell(c)}</td>
+      <td class="right nowrap">${ask != null ? `${askN > 1 ? '<span class="small muted">da</span> ' : ''}<b>${eur(ask)}</b>` : '<span class="muted">—</span>'}</td></tr>`).join('')}
     </tbody></table></div>
     ${pages > 1 ? `<div class="pager"><button class="btn sm" data-pg="${F.p - 1}" ${F.p ? '' : 'disabled'}>‹</button><span class="small muted">Pagina ${F.p + 1} di ${pages}</span><button class="btn sm" data-pg="${F.p + 1}" ${F.p < pages - 1 ? '' : 'disabled'}>›</button></div>` : ''}`;
   queueImages(slice.map(x => x.c.id));
-  $$('#ctab th[data-sort]').forEach(h => h.onclick = () => { const k = h.dataset.sort; F.dir = F.sort === k ? -F.dir : (['avail', 'sold', 'buy', 'sell', 'mkt'].includes(k) ? -1 : 1); F.sort = k; drawColl(); });
+  $$('#ctab [data-ck]').forEach(cb => cb.onchange = () => { cb.checked ? SEL.add(cb.dataset.ck) : SEL.delete(cb.dataset.ck); cb.closest('tr').classList.toggle('sel', cb.checked); drawSelBar(); });
+  $('#ckall') && ($('#ckall').onchange = e => { slice.forEach(x => e.target.checked ? SEL.add(x.c.id) : SEL.delete(x.c.id)); drawColl(); });
+  drawSelBar();
+  $$('#ctab th[data-sort]').forEach(h => h.onclick = () => { const k = h.dataset.sort; F.dir = F.sort === k ? -F.dir : (['avail', 'sold', 'buy', 'sell', 'mkt', 'ask'].includes(k) ? -1 : 1); F.sort = k; drawColl(); });
   $$('#ctab [data-pg]').forEach(b => b.onclick = () => { F.p = +b.dataset.pg; drawColl(); window.scrollTo(0, 0); });
 }
 
@@ -1362,8 +1457,9 @@ function pageCard(app, id){
     </div></div>
     ${cmPanel(c)}
     <div class="panel flush"><div class="panel-h"><h2>Copie disponibili</h2><span class="muted">${st.avail}</span></div>
-      ${av.length ? `<div class="tw"><table class="t"><thead><tr><th>Q.tà</th><th>Condizione / lingua</th><th>Acquistata</th><th class="right">Costo</th><th class="hide-m">Note</th><th></th></tr></thead><tbody>
+      ${av.length ? `<div class="tw"><table class="t"><thead><tr><th>Q.tà</th><th>Condizione / lingua</th><th>Acquistata</th><th class="right">Costo</th><th class="right">In vendita a</th><th class="hide-m">Note</th><th></th></tr></thead><tbody>
       ${av.map(x => `<tr><td><b>${x.qty}</b></td><td>${attrs(x)}</td><td class="nowrap">${fdate(x.buy_date)}</td><td class="right nowrap">${x.lot_id ? lotLink(x) : eur(x.buy_price) + (x.qty > 1 ? ' <span class="small muted">cad.</span>' : '')}</td>
+        <td class="right nowrap"><a href="#" data-act="ask" data-id="${x.id}" title="Imposta il prezzo di vendita" class="askl">${askCell(x)}</a></td>
         <td class="hide-m small muted">${esc(x.notes || '')}</td>
         <td class="acts"><button class="btn sm ok" data-act="sell" data-id="${x.id}">Vendi</button> <button class="btn sm" data-act="editCopy" data-id="${x.id}" title="Modifica">✎</button> <button class="btn sm dan" data-act="delCopy" data-id="${x.id}" title="Elimina">🗑</button></td></tr>`).join('')}
       </tbody></table></div>` : `<div class="empty">Nessuna copia disponibile.</div>`}
@@ -1422,7 +1518,8 @@ function addCardForm(pre = {}){
         <div class="small muted" style="margin-top:6px">Il costo del lotto resta condiviso: il guadagno si calcola sul lotto intero.</div>
       </div>
     </fieldset>
-    <div style="margin-top:12px"><label class="f">Note</label><input class="inp" name="notes"></div>
+    <div class="fg" style="margin-top:12px"><div><label class="f">In vendita a € <span style="font-weight:400">(facoltativo, per copia)</span></label><input class="inp" name="ask_price" inputmode="decimal" placeholder="0,00"></div>
+      <div style="grid-column:span 2"><label class="f">Note</label><input class="inp" name="notes"></div></div>
     <div id="mergehint" class="note" style="margin-top:12px" hidden></div>
     <div class="mfoot"><button type="button" class="btn" data-close2>Annulla</button><button type="submit" class="btn" name="again" value="1">Salva e aggiungi altra</button><button type="submit" class="btn pri">Salva</button></div>
     ${dl('dl-ed', EDITIONS)}<datalist id="dl-rar"></datalist>
@@ -1516,7 +1613,8 @@ function addCardForm(pre = {}){
         const cid = await ensureCard(tx, d);
         if (lotId === '__new'){ lotId = uid(); await tx.insert('lots', {id: lotId, description: clean(E('lot_desc').value), buy_date: E('lot_date').value || null, total_price: num(E('lot_price').value) || 0}); }
         await addCopy(tx, {card_id: cid, lot_id: lotId || null, qty, condition: E('condition').value, edition: clean(E('edition').value) || null, language: E('language').value || null,
-          buy_date: E('buy_date').value || null, buy_price: isLot ? null : price, notes: clean(E('notes').value) || null});
+          buy_date: E('buy_date').value || null, buy_price: isLot ? null : price, notes: clean(E('notes').value) || null,
+          ...(num(E('ask_price').value) != null ? {ask_price: round2(num(E('ask_price').value)), ask_date: today()} : {})});
         d.id = cid;
       });
       if (!ok) return;
@@ -1575,6 +1673,7 @@ function editCopyForm(id){
     <div><label class="f">Lotto</label><select class="inp" name="lot">${opt('', x.lot_id, '— nessuno (singola)')}${lotOptions(x.lot_id)}</select></div>
     <div><label class="f">Prezzo unitario (€)</label><input class="inp" name="buy_price" inputmode="decimal" value="${x.buy_price ?? ''}"></div>
     <div><label class="f">Stato</label><select class="inp" name="status">${opt('disponibile', x.status, 'Disponibile')}${opt('venduto', x.status, 'Venduta')}</select></div>
+    <div class="askf"><label class="f">In vendita a € (per copia)</label><input class="inp" name="ask_price" inputmode="decimal" value="${x.ask_price != null ? fmtIn(x.ask_price) : ''}" placeholder="non in vendita"></div>
     <div class="sellf"><label class="f">Data vendita</label><input class="inp" name="sell_date" type="date" value="${x.sell_date || ''}"></div>
     <div class="sellf"><label class="f">Incasso totale (€)</label><input class="inp" name="sell_price" inputmode="decimal" value="${x.sell_price ?? ''}"></div>
     <div class="sellf"><label class="f">Piattaforma</label><input class="inp" name="platform" list="dl-pl" value="${esc(x.platform || '')}"></div>
@@ -1583,7 +1682,7 @@ function editCopyForm(id){
   {wide: true, onMount: m => {
     const f = $('#ecp', m), E = n => f.elements[n];
     $('[data-c]', m).onclick = closeModal;
-    const tog = () => $$('.sellf', m).forEach(el => el.style.display = E('status').value === 'venduto' ? '' : 'none');
+    const tog = () => { $$('.sellf', m).forEach(el => el.style.display = E('status').value === 'venduto' ? '' : 'none'); $$('.askf', m).forEach(el => el.style.display = E('status').value === 'venduto' ? 'none' : ''); };
     E('status').onchange = tog; tog();
     f.onsubmit = async e => {
       e.preventDefault();
@@ -1591,6 +1690,7 @@ function editCopyForm(id){
       const patch = {qty: Math.max(1, parseInt(E('qty').value) || 1), condition: E('condition').value, language: E('language').value || null, edition: clean(E('edition').value) || null,
         buy_date: E('buy_date').value || null, lot_id: E('lot').value || null, buy_price: E('lot').value ? null : num(E('buy_price').value), status: sold ? 'venduto' : 'disponibile',
         sell_date: sold ? (E('sell_date').value || today()) : null, sell_price: sold ? num(E('sell_price').value) : null, platform: sold ? (clean(E('platform').value) || null) : null, order_id: sold ? (x.order_id || null) : null, notes: clean(E('notes').value) || null};
+      { const ap = num(E('ask_price').value); if (!sold && ap !== x.ask_price && !S.noAsk){ patch.ask_price = ap == null ? null : round2(ap); patch.ask_date = ap == null ? null : (x.ask_date && x.ask_price != null ? x.ask_date : today()); } }
       const ok = await commit(`Modificata copia di ${c.name}`, async tx => {
         await tx.update('copies', id, patch);
         const me = S.copies.get(id);
@@ -1648,9 +1748,9 @@ function orderForm(pre = {}){
     const itemsTotal = () => sum(rows, r => num(r.price) || 0);
     const drawRows = () => {
       $('#orows', m).innerHTML = rows.length ? rows.map((r, i) => {
-        const x = S.copies.get(r.id), c = S.cards.get(x.card_id), est = estCopy(c, x);
+        const x = S.copies.get(r.id), c = S.cards.get(x.card_id), est = x.ask_price ?? estCopy(c, x);
         return `<div class="orow" data-i="${i}">${thumbHtml(c)}<div class="grow" style="min-width:0"><b>${esc(c.name)}</b>
-          <div class="small muted">${esc(c.expansion || '—')}${c.rarity ? ' · ' + esc(c.rarity) : ''} ${condB(x.condition)} ${x.language ? `<span class="b lang">${esc(x.language)}</span>` : ''} · ${x.lot_id ? 'da lotto' : 'pagata ' + eur(x.buy_price) + ' cad.'}${est != null ? ` · ${mktUnit(c, x) != null ? 'mercato' : 'di solito la vendi a'} ${eur(est)}` : ''}</div></div>
+          <div class="small muted">${esc(c.expansion || '—')}${c.rarity ? ' · ' + esc(c.rarity) : ''} ${condB(x.condition)} ${x.language ? `<span class="b lang">${esc(x.language)}</span>` : ''} · ${x.lot_id ? 'da lotto' : 'pagata ' + eur(x.buy_price) + ' cad.'}${est != null ? ` · ${x.ask_price != null ? 'in vendita a' : mktUnit(c, x) != null ? 'mercato' : 'di solito la vendi a'} ${eur(est)}` : ''}</div></div>
           <div class="oq"><label class="f">Q.tà <span style="font-weight:400">/ ${x.qty}</span></label><input class="inp" type="number" min="1" max="${x.qty}" value="${r.qty}" data-q></div>
           <div class="op"><label class="f">Prezzo €</label><input class="inp" inputmode="decimal" value="${esc(r.price)}" data-p placeholder="${est != null ? fmtIn(est * r.qty) : '0,00'}"></div>
           <button type="button" class="x" data-rm title="Togli dall'ordine">×</button></div>`;
@@ -1960,11 +2060,12 @@ function pageStale(app){
       <div class="stat"><div class="l">Capitale fermo</div><div class="v">${eur(capital)}</div><div class="s">quanto le hai pagate (singole)</div></div>
       <div class="stat"><div class="l">Valore stimato</div><div class="v">${est ? '≈ ' + eur(est) : '—'}</div><div class="s">a prezzo di mercato Cardmarket</div></div>
     </div>
-    ${list.length ? `<div class="tw" style="margin-top:14px"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th class="hide-m">Espansione</th><th></th><th>Q.tà</th><th class="hide-m">Acquistata</th><th>Ferma da</th><th class="right">Costo</th><th class="right">Stima</th><th></th></tr></thead><tbody>
+    ${list.length ? `<div class="tw" style="margin-top:14px"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th class="hide-m">Espansione</th><th></th><th>Q.tà</th><th class="hide-m">Acquistata</th><th>Ferma da</th><th class="right">Costo</th><th class="right">Stima</th><th class="right">In vendita a</th><th></th></tr></thead><tbody>
       ${list.slice(0, 300).map(({c, card, days, est, cost}) => `<tr><td class="tc">${thumbHtml(card)}</td><td><a class="cname" href="#/c/${card.id}">${esc(card.name)}</a>${card.rarity ? `<div class="small muted">${esc(card.rarity)}</div>` : ''}</td><td class="hide-m muted">${esc(card.expansion || '—')}</td>
         <td>${condB(c.condition)} ${c.language ? `<span class="b lang">${esc(c.language)}</span>` : ''}</td><td>${c.qty}</td><td class="hide-m nowrap">${fdate(c.buy_date)}</td>
         <td class="nowrap"><span class="b ${days >= 365 ? 'c-PL' : days >= 180 ? 'c-LP' : 'c-x'}">${ageTxt(days)}</span></td>
         <td class="right">${c.lot_id ? `<a class="b lotb" href="#/lotto/${c.lot_id}">lotto</a>` : eur(cost)}</td><td class="right">${est != null ? eur(est) : '<span class="muted">—</span>'}</td>
+        <td class="right nowrap"><a href="#" data-act="ask" data-id="${c.id}" class="askl">${askCell(c)}</a></td>
         <td class="acts"><button class="btn sm ok" data-act="sell" data-id="${c.id}">Vendi</button></td></tr>`).join('')}
     </tbody></table></div>${list.length > 300 ? `<div class="small muted" style="padding:8px 16px">Mostrate le prime 300 righe.</div>` : ''}` : `<div class="empty">Nessuna carta ferma da più di ${months} mesi. 👍</div>`}
     </div>
@@ -1995,6 +2096,7 @@ const ALIASES = {
   sellTotal: ['prezzo vendita totale', 'prezzo vendita', 'incasso', 'sale price', 'sold price'],
   platform: ['piattaforma', 'platform'],
   notes: ['note', 'notes'],
+  askPrice: ['in vendita a', 'prezzo richiesto', 'prezzo di vendita richiesto', 'asking price', 'listing price'],
   desc: ['descrizione', 'description', 'descrizione lotto'],
   lotTotal: ['prezzo totale', 'costo totale', 'prezzo lotto', 'costo lotto', 'totale', 'costo', 'prezzo'],
   foil: ['foil'], fname: ['first edition', '1st edition']
@@ -2086,7 +2188,7 @@ function buildImport(sheets, defaults){
         qty, condition: normCond(g('condition')), edition, language: clean(g('language') ?? '').toUpperCase().slice(0, 12) || null,
         buy_date: parseDate(g('buyDate')) || defaults.date || null, buy_price: lotRef ? null : (unit == null ? null : round2(unit)),
         status: sold ? 'venduto' : 'disponibile', sell_date: sold ? (parseDate(g('sellDate')) || null) : null, sell_price: sold ? num(g('sellTotal')) : null,
-        platform: clean(g('platform') ?? '') || (sold ? null : null), notes, lotRef: lotRef || null};
+        platform: clean(g('platform') ?? '') || (sold ? null : null), notes, lotRef: lotRef || null, ask_price: sold ? null : (num(g('askPrice')) == null ? null : round2(num(g('askPrice'))))};
       if (lotRef){
         const k = norm(lotRef); const a = lotAgg.get(k) || {sum: 0, date: null}; a.sum += num(g('buyTotal')) || 0; a.date = a.date || row.buy_date; lotAgg.set(k, a);
       }
@@ -2138,7 +2240,8 @@ async function runImport(plan){
     const avail = [...S.copies.values()].filter(c => c.status !== 'venduto');
     for (const r of rows){
       const cp = {card_id: byKey.get(keyOf(r)), lot_id: r.lotRef ? (lotMap.get(norm(r.lotRef)) || null) : null, qty: r.qty, condition: r.condition, edition: r.edition, language: r.language,
-        buy_date: r.buy_date, buy_price: r.buy_price, status: r.status, sell_date: r.sell_date, sell_price: r.sell_price, platform: r.platform, notes: r.notes};
+        buy_date: r.buy_date, buy_price: r.buy_price, status: r.status, sell_date: r.sell_date, sell_price: r.sell_price, platform: r.platform, notes: r.notes,
+        ...(r.ask_price != null && r.status !== 'venduto' ? {ask_price: r.ask_price, ask_date: today()} : {})};
       if (cp.status === 'disponibile'){
         const twin = avail.find(a => sameAvail(a, cp) && (a.notes || '') === (cp.notes || ''));
         if (twin){ bumps.set(twin.id, (bumps.get(twin.id) || twin.qty) + cp.qty); continue; }
@@ -2165,7 +2268,7 @@ function exportXLSX(){
       for (const x of copiesOf(c.id)) rows.push({'Nome Carta': c.name, 'Edizione': x.edition || '', 'Set/Espansione': c.expansion, 'Rarità': c.rarity, 'Condizione': x.condition || '', 'Lingua': x.language || '',
         'Quantità': x.qty, 'ID Lotto': x.lot_id ? lotRef.get(x.lot_id) || '' : '', 'Data Acquisto': fdate(x.buy_date).replace('—', ''), 'Prezzo Acquisto Unitario': x.buy_price ?? '',
         'Prezzo Acquisto Totale': x.buy_price != null ? round2(x.buy_price * x.qty) : '', 'Stato': x.status === 'venduto' ? 'Venduto' : 'Disponibile', 'Data Vendita': fdate(x.sell_date).replace('—', ''),
-        'Prezzo Vendita Totale': x.sell_price ?? '', 'Prezzo Mercato': mktUnit(c, x) ?? '', 'Ricavo Netto': x.status === 'venduto' && x.sell_price != null ? round2(netSell(x)) : '', 'Piattaforma': x.platform || '', 'Note': x.notes || ''});
+        'In vendita a': x.status !== 'venduto' && x.ask_price != null ? x.ask_price : '', 'Prezzo Vendita Totale': x.sell_price ?? '', 'Prezzo Mercato': mktUnit(c, x) ?? '', 'Ricavo Netto': x.status === 'venduto' && x.sell_price != null ? round2(netSell(x)) : '', 'Piattaforma': x.platform || '', 'Note': x.notes || ''});
     if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), g.replace(/[\\/?*[\]:]/g, '').slice(0, 31));
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lots.map(l => ({'ID Lotto': lotRef.get(l.id), 'Descrizione': l.description, 'Data': fdate(l.buy_date).replace('—', ''), 'Prezzo Totale': l.total_price}))
@@ -2175,8 +2278,35 @@ function exportXLSX(){
     'Articoli': round2(k.gross), 'Spedizione incassata': o.shipping_charged, 'Costo spedizione': o.shipping_cost, 'Commissione': o.fee, 'Netto': round2(k.net), 'Note': o.notes || ''}; })), 'Vendite');
   XLSX.writeFile(wb, `dsr-archive-${today()}.xlsx`);
 }
+/* ===== backup: lettura dei file JSON e dei backup cifrati del workflow GitHub ===== */
+const gunzipText = async u8 => {
+  if (u8[0] !== 0x1f || u8[1] !== 0x8b) return new TextDecoder().decode(u8);
+  return new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+};
+function askPassword(){
+  return new Promise(res => openModal('Backup cifrato', `<form id="pwf"><label class="f">Password del backup (il secret BACKUP_PASSWORD su GitHub)</label><input class="inp" type="password" name="pw" autofocus autocomplete="off">
+    <div class="mfoot"><button type="button" class="btn" data-c>Annulla</button><button class="btn pri">Apri</button></div></form>`, {onMount: m => {
+    $('[data-c]', m).onclick = () => { closeModal(); res(null); };
+    $('#pwf', m).onsubmit = e => { e.preventDefault(); const v = e.target.elements.pw.value; closeModal(); res(v); };
+  }}));
+}
+/** apre un file di backup: JSON semplice, JSON compresso o cifrato (openssl aes-256-cbc, pbkdf2 sha256 200000) */
+async function readBackupFile(file){
+  const buf = new Uint8Array(await file.arrayBuffer());
+  if (buf.length > 16 && new TextDecoder().decode(buf.slice(0, 8)) === 'Salted__'){
+    const pw = await askPassword(); if (!pw) throw new Error('Ripristino annullato');
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+    const bits = new Uint8Array(await crypto.subtle.deriveBits({name: 'PBKDF2', salt: buf.slice(8, 16), iterations: 200000, hash: 'SHA-256'}, base, 384));
+    const key = await crypto.subtle.importKey('raw', bits.slice(0, 32), 'AES-CBC', false, ['decrypt']);
+    let plain;
+    try { plain = new Uint8Array(await crypto.subtle.decrypt({name: 'AES-CBC', iv: bits.slice(32, 48)}, key, buf.slice(16))); }
+    catch { throw new Error('Password sbagliata'); }
+    return JSON.parse(await gunzipText(plain));
+  }
+  return JSON.parse(await gunzipText(buf));
+}
 async function importJSON(file){
-  const j = JSON.parse(await file.text());
+  const j = await readBackupFile(file);
   if (!j.cards || !j.copies) throw new Error('File JSON non riconosciuto');
   index();
   return commit(`Ripristinate ${j.copies.length} righe da backup`, async tx => {
@@ -2211,7 +2341,9 @@ function pageData(app){
           <div class="small" id="cmst">${cmStatusHtml()}</div><div class="filters" style="margin-top:8px"><button class="btn sm" id="cmre">↻ Ricarica listino</button></div></div>
         <div class="panel"><h2>Immagini delle carte</h2><p class="muted small" style="margin-top:-4px">Yu-Gi-Oh! e Pokémon: l'immagine viene cercata da sola quando apri una carta. Qui puoi cercarle tutte in una volta. Per One Piece e altri giochi carica una foto dalla pagina della carta.</p>
           <div class="filters"><button class="btn" id="imgall">🔎 Trova immagini mancanti</button><label class="small"><input type="checkbox" id="imgauto" ${localStorage.getItem('cardarchive.autoimg') === 'off' ? '' : 'checked'}> ricerca automatica</label></div><div id="imgprog" class="small muted" style="margin-top:8px"></div></div>
-        <div class="panel"><h2>Ripristina backup JSON</h2><label class="btn"><input type="file" id="jsf" accept=".json" hidden>Scegli file .json</label>
+        <div class="panel"><h2>Backup automatico</h2><p class="muted small" style="margin-top:-4px">Ogni lunedì un'automazione salva una copia cifrata di tutto l'archivio sul tuo GitHub (ultimi 6 mesi).</p>
+          <a class="btn sm" href="https://github.com/${CM_REPO}/tree/backup" target="_blank" rel="noopener">Vedi i backup su GitHub ↗</a></div>
+        <div class="panel"><h2>Ripristina backup</h2><label class="btn"><input type="file" id="jsf" accept=".json,.enc,.gz" hidden>Scegli file (.json o backup cifrato)</label>
           <div class="small muted" style="margin-top:8px">Aggiunge ciò che manca, senza duplicare.</div></div>
         <div class="panel" style="border-color:#5a2a30"><h2 style="color:var(--red)">Elimina tutto</h2><p class="muted small" style="margin-top:-4px">Cancella carte, copie e lotti. Prima scarico in automatico un backup JSON.</p>
           <button class="btn dan" data-act="deleteAll">Elimina tutto l'archivio…</button></div>
@@ -2256,6 +2388,11 @@ function showPlan(plan, fname){
       ${sold.length} righe vendute (incasso ${eur(sum(sold, r => r.sell_price))}) · spesa singole ${eur(sum(rows.filter(r => r.buy_price != null), r => r.buy_price * r.qty))}
       ${lots.length ? ` · ${lots.length} lotti (${eur(sum(lots, l => l.total_price))})${lots.some(l => l._guessed) ? ' <span class="neg">— alcuni lotti non erano nel foglio “Lotti”: controlla il prezzo dopo l\'import</span>' : ''}` : ''}
     </div>
+    ${info.format === 'Ordine CardTrader' ? `<div class="ctbox"><div class="filters">
+      <button type="button" class="btn" id="ct5">＋ <span id="ct5p">5</span>% CardTrader</button>
+      <span class="small muted">percentuale</span><input class="inp" id="ctpct" inputmode="decimal" value="5" style="width:70px">
+      <span class="small muted" style="margin-left:8px">spedizione pagata €</span><input class="inp" id="ctship" inputmode="decimal" placeholder="0,00" style="width:90px"></div>
+      <div class="small" id="cttot" style="margin-top:8px"></div></div>` : ''}
     <div class="tw" style="margin-top:10px;max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:6px"><table class="t"><thead><tr><th>Gioco</th><th>Carta</th><th>Espansione</th><th>Rarità</th><th>Q.tà</th><th></th><th class="right">Acquisto</th><th>Stato</th></tr></thead><tbody>
       ${rows.slice(0, 40).map(r => `<tr><td class="small">${esc(r.game)}</td><td>${esc(r.name)}</td><td class="small muted">${esc(r.expansion)}</td><td class="small">${esc(r.rarity)}</td><td>${r.qty}</td><td>${condB(r.condition)}</td>
         <td class="right">${r.lotRef ? '<span class="b lotb">lotto</span>' : eur(r.buy_price)}</td><td>${r.status === 'venduto' ? '<span class="b st-v">Venduta</span>' : '<span class="b st-d">Disp.</span>'}</td></tr>`).join('')}
@@ -2263,7 +2400,29 @@ function showPlan(plan, fname){
     <div class="mfoot" style="border:0"><button class="btn" id="impx">Annulla</button><button class="btn pri" id="impgo">Importa ${rows.length} righe</button></div>`;
   if (!rows.length) return;
   $('#impx').onclick = () => { $('#impv').innerHTML = ''; $('#imf').value = ''; };
-  $('#impgo').onclick = async () => { $('#impgo').disabled = true; $('#impgo').textContent = 'Importazione…'; const ok = await runImport(plan); if (ok) location.hash = '#/collezione'; };
+  // ordini CardTrader: tasto per aggiungere la commissione (5%) e la spedizione al costo delle carte
+  let ctOn = false;
+  const ctParams = () => ({pct: ctOn ? (num($('#ctpct')?.value) || 0) : 0, ship: num($('#ctship')?.value) || 0});
+  const ctBase = () => sum(rows.filter(r => r.buy_price != null), r => r.buy_price * r.qty);
+  const ctDraw = () => {
+    if (!$('#ct5')) return;
+    const {pct, ship} = ctParams(), base = ctBase(), fee = round2(base * pct / 100);
+    $('#ct5').classList.toggle('pri', ctOn); $('#ct5p').textContent = String(num($('#ctpct').value) || 0).replace('.', ',');
+    $('#cttot').innerHTML = `Carte ${eur(base)}${ctOn ? ` + commissione ${String(pct).replace('.', ',')}% ${eur(fee)}` : ''}${ship ? ` + spedizione ${eur(ship)}` : ''} = <b>${eur(base + fee + ship)}</b>${ctOn || ship ? ' · il totale viene diviso sulle carte in proporzione al prezzo' : ' · premi il tasto per aggiungere la commissione'}`;
+  };
+  if ($('#ct5')){
+    $('#ct5').onclick = () => { ctOn = !ctOn; ctDraw(); };
+    ['#ctpct', '#ctship'].forEach(id => $(id).addEventListener('input', ctDraw)); ctDraw();
+  }
+  $('#impgo').onclick = async () => {
+    $('#impgo').disabled = true; $('#impgo').textContent = 'Importazione…';
+    let p2 = plan;
+    if ($('#ct5')){
+      const {pct, ship} = ctParams(), base = ctBase();
+      if (pct || ship) p2 = {...plan, rows: plan.rows.map(r => r.buy_price == null ? r : {...r, buy_price: round2(r.buy_price * (1 + pct / 100) + (base ? ship * r.buy_price / base : 0))})};
+    }
+    const ok = await runImport(p2); if (ok) location.hash = '#/collezione'; else { $('#impgo').disabled = false; $('#impgo').textContent = 'Importa'; }
+  };
 }
 async function deleteAll(){
   openModal('Elimina tutto', `<p style="margin-top:0">Verranno cancellate <b>${S.cards.size}</b> carte, <b>${S.copies.size}</b> righe di copie, <b>${S.lots.size}</b> lotti e <b>${S.orders.size}</b> vendite. Scarico prima un backup JSON e potrai comunque annullare con ↶.</p>
@@ -2299,6 +2458,19 @@ const ACT = {
     if (!S.cards.has(c.id)) location.hash = '#/collezione';
   },
   sell: d => orderForm({items: [d.id]}),
+  ask: d => askForm(d.id),
+  selNone: () => { SEL.clear(); drawColl(); },
+  selSell: () => { const ids = selAvail().map(x => x.id); if (ids.length) orderForm({items: ids}); },
+  selAsk: () => askForm(selAvail().map(x => x.id)),
+  selLot: () => selLotForm(),
+  selLang: () => selFieldForm('language'),
+  selCond: () => selFieldForm('condition'),
+  selDel: async () => {
+    const ids = [...SEL], n = sum(ids.flatMap(id => copiesOf(id)), x => x.qty);
+    if (!await confirmBox('Elimina carte', `Eliminare <b>${ids.length}</b> carte con tutte le loro ${n} copie (vendute comprese)?`, 'Elimina')) return;
+    const ok = await commit(`Eliminate ${ids.length} carte`, async tx => { await tx.remove('copies', ids.flatMap(id => copiesOf(id).map(x => x.id))); await tx.remove('cards', ids); });
+    if (ok){ SEL.clear(); render(); }
+  },
   newOrder: () => orderForm(),
   upgrade: () => upgradeModal(),
   cmPick: d => S.noCmId ? upgradeModal() : cmPickForm(d.id),
