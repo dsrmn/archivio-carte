@@ -848,7 +848,7 @@ function mktUnit(card, copy){
 /** stima di una copia: prezzo di mercato corretto per lingua, altrimenti il tuo prezzo medio di vendita */
 const estCopy = (card, copy) => mktUnit(card, copy) ?? estUnit(card.id);
 function mktTrend(p){ if (!p || p.trend == null || !p.avg30) return 0; return (p.trend - p.avg30) / p.avg30; }
-const mktArrow = p => { const t = mktTrend(p); return Math.abs(t) < .1 ? '' : `<span class="${t > 0 ? 'pos' : 'neg'}" title="trend rispetto alla media 30 giorni">${t > 0 ? '▲' : '▼'}${Math.round(Math.abs(t) * 100)}%</span>`; };
+const mktArrow = () => '';
 const mktCell = card => { const p = cmFor(card), v = mktPrice(p); return v == null ? '<span class="muted">—</span>' : `${eur(v)} ${mktArrow(p)}`; };
 /** link alla carta su Cardmarket: elenco delle carte singole filtrato su espansione e nome (apre la carta giusta) */
 const cmUrl = (card, p) => {
