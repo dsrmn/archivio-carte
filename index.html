@@ -1178,7 +1178,6 @@ function statTiles(t){
     <div class="stat"><div class="l">Speso</div><div class="v">${eur(t.spent)}</div><div class="s">di cui lotti ${eur(t.spentLots)}</div></div>
     <div class="stat"><div class="l">Incassato netto</div><div class="v">${eur(t.net)}</div><div class="s">${t.sold.toLocaleString('it-IT')} copie vendute · commissioni e spedizioni ${eur(t.costs)}</div></div>
     <div class="stat"><div class="l">Saldo</div><div class="v">${signEur(t.net - t.spent)}</div><div class="s">incassato netto − speso</div></div>
-    ${t.mkt ? `<div class="stat"><div class="l">Valore di mercato</div><div class="v">${eur(t.mkt)}</div><div class="s">copie disponibili a prezzo Cardmarket${t.noMkt ? ` · ${t.noMkt} senza prezzo` : ''}</div></div>` : ''}
   </div>`;
 }
 function pageHome(app){
