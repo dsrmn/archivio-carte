@@ -185,6 +185,7 @@ a.panel.banner:hover{text-decoration:none;border-color:var(--orange)}
 @media (max-width:760px){.orow{flex-wrap:wrap}.orow .grow{flex-basis:calc(100% - 50px)}.orow .oq,.orow .op{flex:1}}
 
 /* Cardmarket */
+a.btn.cmlink{border-color:#1f4f8f;color:#8fb4ff}a.btn.cmlink:hover{background:#14233d}
 .cmp h3{font-size:15px}.cmgrid{display:flex;gap:10px 28px;flex-wrap:wrap;margin-top:12px}.cmgrid div{display:flex;flex-direction:column}.cmgrid span{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}.cmgrid b{font-size:20px;font-variant-numeric:tabular-nums}
 .cml{max-height:55vh;overflow:auto;border:1px solid var(--line);border-radius:6px}.cmi{display:flex;gap:12px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer}.cmi:hover{background:var(--hover)}.cmi:last-child{border-bottom:0}
 .mv{display:flex;gap:10px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line2)}.mv:last-child{border-bottom:0}.mv a{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -838,7 +839,7 @@ function cmFor(card){
   return CM.match.get(card.id);
 }
 /** correzione % del prezzo di mercato per la lingua della copia (impostazioni) */
-const langFactor = l => 1 + ((SET.langAdj || {})[l || ''] || 0) / 100;
+const langFactor = () => 1;
 function mktUnit(card, copy){
   const p = cmFor(card); if (!p) return null;
   const base = copy && /foil|reverse/i.test(copy.notes || '') && p.trendFoil ? p.trendFoil : mktPrice(p);
@@ -849,7 +850,12 @@ const estCopy = (card, copy) => mktUnit(card, copy) ?? estUnit(card.id);
 function mktTrend(p){ if (!p || p.trend == null || !p.avg30) return 0; return (p.trend - p.avg30) / p.avg30; }
 const mktArrow = p => { const t = mktTrend(p); return Math.abs(t) < .1 ? '' : `<span class="${t > 0 ? 'pos' : 'neg'}" title="trend rispetto alla media 30 giorni">${t > 0 ? '▲' : '▼'}${Math.round(Math.abs(t) * 100)}%</span>`; };
 const mktCell = card => { const p = cmFor(card), v = mktPrice(p); return v == null ? '<span class="muted">—</span>' : `${eur(v)} ${mktArrow(p)}`; };
-const cmUrl = (card, p) => `https://www.cardmarket.com/it/${CM_SLUG[CM_GAMES[card.game]]}/Products/Search?searchString=${encodeURIComponent(cmDisplayName(p ? p.name : card.name, 3).replace(/\s*\(.*$/, ''))}`;
+/** link alla carta su Cardmarket: elenco delle carte singole filtrato su espansione e nome (apre la carta giusta) */
+const cmUrl = (card, p) => {
+  const slug = CM_SLUG[CM_GAMES[card.game]] || 'YuGiOh';
+  const q = encodeURIComponent(clean(cmQuotes(p ? p.name : card.name).replace(/\s*\[[^\]]*\]/g, '').replace(/\s*\(V\.\s*\d+[^)]*\)/gi, '')));
+  return p ? `https://www.cardmarket.com/it/${slug}/Products/Singles?idExpansion=${p.exp}&searchString=${q}` : `https://www.cardmarket.com/it/${slug}/Products/Search?searchString=${q}`;
+};
 function cmPanel(card){
   const gid = CM_GAMES[card.game];
   if (!gid) return '';
@@ -1334,6 +1340,7 @@ function pageCard(app, id){
   app.innerHTML = `
     <div class="crumbs"><a href="#/">Home</a> › <a href="#/g/${enc(c.game)}">${esc(c.game)}</a> › <a href="#/g/${enc(c.game)}/${enc(c.expansion)}">${esc(c.expansion || '(senza espansione)')}</a> › <b>${esc(c.name)}</b></div>
     <div class="pagehead"><div class="grow"><h1>${esc(c.name)}</h1><div class="muted">${esc(c.expansion || '—')}${c.rarity ? ' · ' + esc(c.rarity) : ''}</div></div>
+      ${CM_GAMES[c.game] ? `<a class="btn cmlink" href="${esc(cmUrl(c, cmFor(c)))}" target="_blank" rel="noopener" title="${cmFor(c) ? 'Apri questa carta su Cardmarket' : 'Cerca su Cardmarket'}">${cmFor(c) ? 'Vedi su Cardmarket ↗' : 'Cerca su Cardmarket ↗'}</a>` : ''}
       <button class="btn" data-act="editCard" data-id="${c.id}">✎ Modifica</button>
       <button class="btn dan" data-act="delCard" data-id="${c.id}">Elimina</button>
       <button class="btn pri" data-act="addCard" data-card="${c.id}">＋ Aggiungi copie</button></div>
@@ -1357,9 +1364,8 @@ function pageCard(app, id){
     </div></div>
     ${cmPanel(c)}
     <div class="panel flush"><div class="panel-h"><h2>Copie disponibili</h2><span class="muted">${st.avail}</span></div>
-      ${av.length ? `<div class="tw"><table class="t"><thead><tr><th>Q.tà</th><th>Condizione / lingua</th><th>Acquistata</th><th class="right">Costo</th><th class="right">Stima</th><th class="hide-m">Note</th><th></th></tr></thead><tbody>
+      ${av.length ? `<div class="tw"><table class="t"><thead><tr><th>Q.tà</th><th>Condizione / lingua</th><th>Acquistata</th><th class="right">Costo</th><th class="hide-m">Note</th><th></th></tr></thead><tbody>
       ${av.map(x => `<tr><td><b>${x.qty}</b></td><td>${attrs(x)}</td><td class="nowrap">${fdate(x.buy_date)}</td><td class="right nowrap">${x.lot_id ? lotLink(x) : eur(x.buy_price) + (x.qty > 1 ? ' <span class="small muted">cad.</span>' : '')}</td>
-        <td class="right nowrap">${(u => u == null ? '<span class="muted">—</span>' : eur(u) + (x.qty > 1 ? ' <span class="small muted">cad.</span>' : '') + (langFactor(x.language) !== 1 && mktUnit(c, x) != null ? `<div class="small muted">${esc(x.language)} ${(langFactor(x.language) - 1) * 100 > 0 ? '+' : ''}${Math.round((langFactor(x.language) - 1) * 100)}%</div>` : ''))(estCopy(c, x))}</td>
         <td class="hide-m small muted">${esc(x.notes || '')}</td>
         <td class="acts"><button class="btn sm ok" data-act="sell" data-id="${x.id}">Vendi</button> <button class="btn sm" data-act="editCopy" data-id="${x.id}" title="Modifica">✎</button> <button class="btn sm dan" data-act="delCopy" data-id="${x.id}" title="Elimina">🗑</button></td></tr>`).join('')}
       </tbody></table></div>` : `<div class="empty">Nessuna copia disponibile.</div>`}
@@ -2355,12 +2361,9 @@ function feesModal(after){
 }
 function langModal(){
   const nEN = sum([...S.copies.values()].filter(c => c.language === 'EN' && c.status !== 'venduto'), c => c.qty);
-  openModal('Lingue e stima dei prezzi', `<form id="lgf">
-    <p class="muted small" style="margin-top:0">Il prezzo di mercato di Cardmarket è unico per tutte le lingue. Qui puoi dire quanto vale in più o in meno una copia in ciascuna lingua rispetto a quel prezzo (per esempio −15% per l'inglese americano). La correzione si applica a stime, lotti, giacenze, valore di magazzino e prezzi suggeriti.</p>
-    <div class="tw"><table class="t"><thead><tr><th>Lingua</th><th>Correzione sul prezzo di mercato</th></tr></thead><tbody>
-      ${LANGS.map(l => `<tr><td><span class="b lang">${l}</span> ${esc(LANG_LBL[l])}</td><td><div style="display:flex;gap:6px;align-items:center"><input class="inp" style="max-width:90px" data-l="${l}" inputmode="decimal" value="${(SET.langAdj || {})[l] ? String(SET.langAdj[l]).replace('.', ',') : ''}" placeholder="0"><span class="muted">%</span></div></td></tr>`).join('')}
-    </tbody></table></div>
-    <div class="fg" style="margin-top:14px"><div class="full"><label class="f">Le carte in inglese dei CSV di Cardmarket sono…</label>
+  openModal('Lingue', `<form id="lgf">
+    <p class="muted small" style="margin-top:0">Per l'inglese puoi distinguere la stampa europea (EN-EU) da quella americana (EN-US).</p>
+    <div class="fg"><div class="full"><label class="f">Le carte in inglese dei CSV di Cardmarket sono…</label>
       <select class="inp" name="en">${['EN-EU', 'EN-US', 'EN'].map(l => opt(l, SET.enDefault || 'EN-EU', `${l} – ${LANG_LBL[l]}`)).join('')}</select>
       <div class="small muted" style="margin-top:3px">Cardmarket non distingue europeo e americano: questa è la scelta predefinita all'import, poi puoi cambiare la singola copia.</div></div></div>
     ${nEN ? `<div class="note" style="margin-top:12px">${nEN} ${nEN === 1 ? 'copia disponibile ha' : 'copie disponibili hanno'} ancora la lingua “EN” generica. <label><input type="checkbox" name="conv"> Convertile in</label> <select class="inp" name="convto" style="width:auto;display:inline-block">${['EN-EU', 'EN-US'].map(l => opt(l, 'EN-EU')).join('')}</select></div>` : ''}
@@ -2368,8 +2371,7 @@ function langModal(){
     $('[data-c]', m).onclick = closeModal;
     $('#lgf', m).onsubmit = async e => {
       e.preventDefault(); const E = n => e.target.elements[n];
-      const adj = {}; $$('[data-l]', m).forEach(i => { const v = num(i.value); if (v) adj[i.dataset.l] = v; });
-      SET.langAdj = adj; SET.enDefault = E('en').value;
+      SET.langAdj = {}; SET.enDefault = E('en').value;
       const conv = E('conv')?.checked ? E('convto').value : null;
       await saveSettings(); closeModal(); index();
       if (conv) await commit(`Lingua EN convertita in ${conv}`, async tx => {
@@ -2388,7 +2390,7 @@ function settingsModal(){
     ${S.mode === 'supabase' ? `<dt>Progetto</dt><dd class="small">${esc(cfg?.url || '')}</dd>` : ''}
     <dt>Contenuto</dt><dd>${S.cards.size} carte · ${S.copies.size} righe · ${S.lots.size} lotti · ${S.orders.size} vendite</dd>
     <dt>Commissioni</dt><dd>${Object.entries(SET.fees).filter(([, v]) => v.pct || v.fixed).map(([p, v]) => `${esc(p)} ${String(v.pct).replace('.', ',')}%`).join(' · ') || 'nessuna'} · spedizione ${eur(SET.shipCost)}</dd></dl>
-    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="fees">💶 Commissioni e spedizioni…</button><button class="btn" id="langs">🌐 Lingue e stima prezzi…</button></div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="fees">💶 Commissioni e spedizioni…</button><button class="btn" id="langs">🌐 Lingue…</button></div>
     <div class="mfoot">${cfg?.fixed ? '' : '<button class="btn dan" id="chg">Cambia collegamento</button>'}<button class="btn" id="rel">Ricarica dati</button><button class="btn pri" id="out">${S.mode === 'local' ? 'Esci' : 'Esci dall\'account'}</button></div>`,
   {onMount: m => {
     $('#fees', m).onclick = () => feesModal();
