@@ -309,7 +309,9 @@ function normCond(v){
   return clean(v).toUpperCase().slice(0, 12);
 }
 const condB = c => c ? `<span class="b ${CONDS.includes(c) ? 'c-'+c : 'c-x'}" title="${esc(COND_LBL[c] || c)}">${esc(c)}</span>` : '';
-const LANGS = ['IT','EN','DE','FR','ES','PT','JP','KR','CN'];
+const LANGS = ['IT','EN-EU','EN-US','EN','DE','FR','ES','PT','JP','KR','CN'];
+const LANG_LBL = {IT: 'Italiano', 'EN-EU': 'Inglese europeo', 'EN-US': 'Inglese americano', EN: 'Inglese (non specificato)', DE: 'Tedesco', FR: 'Francese', ES: 'Spagnolo', PT: 'Portoghese', JP: 'Giapponese', KR: 'Coreano', CN: 'Cinese'};
+const langOpts = sel => LANGS.map(l => opt(l, sel, `${l} – ${LANG_LBL[l]}`)).join('');
 const RARITIES = {
   'Yu-Gi-Oh!': ['Common','Rare','Super Rare','Ultra Rare','Secret Rare','Ultimate Rare','Ghost Rare','Starlight Rare','Collector\'s Rare','Quarter Century Secret Rare','Prismatic Secret Rare','Platinum Secret Rare','Gold Rare','Premium Gold Rare','Short Print'],
   'Pokémon': ['Common','Uncommon','Rare','Rare Holo','Double Rare','Ultra Rare','Illustration Rare','Special Illustration Rare','Hyper Rare','ACE SPEC Rare','Shiny Rare','Promo'],
@@ -403,8 +405,8 @@ async function loadAll(){
 
 /* ===== impostazioni (commissioni, spedizioni) ===== */
 const PLAT_DEFAULT = {Cardmarket: {pct: 5, fixed: 0}, CardTrader: {pct: 0, fixed: 0}, eBay: {pct: 0, fixed: 0}, Vinted: {pct: 0, fixed: 0}, 'Di persona': {pct: 0, fixed: 0}, Altro: {pct: 0, fixed: 0}};
-let SET = {fees: JSON.parse(JSON.stringify(PLAT_DEFAULT)), shipCost: 0, shipCharged: 0, stale: 6};
-function mergeSet(j){ if (!j) return; SET = {...SET, ...j, fees: {...JSON.parse(JSON.stringify(PLAT_DEFAULT)), ...(j.fees || {})}}; }
+let SET = {fees: JSON.parse(JSON.stringify(PLAT_DEFAULT)), shipCost: 0, shipCharged: 0, stale: 6, langAdj: {}, enDefault: 'EN-EU'};
+function mergeSet(j){ if (!j) return; SET = {...SET, ...j, fees: {...JSON.parse(JSON.stringify(PLAT_DEFAULT)), ...(j.fees || {})}, langAdj: {...(j.langAdj || SET.langAdj || {})}}; }
 async function loadSettings(){
   try { mergeSet(JSON.parse(localStorage.getItem('cardarchive.settings') || 'null')); } catch {}
   if (S.mode !== 'supabase') return;
@@ -835,11 +837,15 @@ function cmFor(card){
   if (!CM.match.has(card.id)){ const r = cmMatch(card); if (r.status === 'loading') return null; CM.match.set(card.id, r.status === 'ok' ? r.p : null); }
   return CM.match.get(card.id);
 }
+/** correzione % del prezzo di mercato per la lingua della copia (impostazioni) */
+const langFactor = l => 1 + ((SET.langAdj || {})[l || ''] || 0) / 100;
 function mktUnit(card, copy){
   const p = cmFor(card); if (!p) return null;
-  if (copy && /foil|reverse/i.test(copy.notes || '') && p.trendFoil) return p.trendFoil;
-  return mktPrice(p);
+  const base = copy && /foil|reverse/i.test(copy.notes || '') && p.trendFoil ? p.trendFoil : mktPrice(p);
+  return base == null ? null : copy ? base * langFactor(copy.language) : base;
 }
+/** stima di una copia: prezzo di mercato corretto per lingua, altrimenti il tuo prezzo medio di vendita */
+const estCopy = (card, copy) => mktUnit(card, copy) ?? estUnit(card.id);
 function mktTrend(p){ if (!p || p.trend == null || !p.avg30) return 0; return (p.trend - p.avg30) / p.avg30; }
 const mktArrow = p => { const t = mktTrend(p); return Math.abs(t) < .1 ? '' : `<span class="${t > 0 ? 'pos' : 'neg'}" title="trend rispetto alla media 30 giorni">${t > 0 ? '▲' : '▼'}${Math.round(Math.abs(t) * 100)}%</span>`; };
 const mktCell = card => { const p = cmFor(card), v = mktPrice(p); return v == null ? '<span class="muted">—</span>' : `${eur(v)} ${mktArrow(p)}`; };
@@ -949,7 +955,7 @@ function cmParseRows(aoa){
     if (flag(r, 'isPlayset')){ qty *= 4; unit /= 4; }
     const p = CM.byId.get(id), gid = p?.gid;
     const notes = [flag(r, 'isFoil') && 'Foil', flag(r, 'isReverseHolo') && 'Reverse Holo', flag(r, 'isSigned') && 'Firmata', flag(r, 'isAltered') && 'Alterata'].filter(Boolean).join(' · ') || null;
-    out.push({id, p, qty, unit: round2(unit), condition: CM_COND[+r[col('condition')]] || 'NM', language: CM_LANG[+r[col('idLanguage')]] || null,
+    out.push({id, p, qty, unit: round2(unit), condition: CM_COND[+r[col('condition')]] || 'NM', language: (l => l === 'EN' ? (SET.enDefault || 'EN') : l)(CM_LANG[+r[col('idLanguage')]] || null),
       edition: flag(r, 'isFirstEd') ? '1st Edition' : null, notes,
       game: p ? CM.idx[gid].game : null, name: p ? cmDisplayName(p.name, gid) : null, expansion: p ? (CM.idx[gid].exp[p.exp] || `Espansione Cardmarket ${p.exp}`) : null, rarity: p ? cmRar(p.name) : ''});
   }
@@ -1351,8 +1357,9 @@ function pageCard(app, id){
     </div></div>
     ${cmPanel(c)}
     <div class="panel flush"><div class="panel-h"><h2>Copie disponibili</h2><span class="muted">${st.avail}</span></div>
-      ${av.length ? `<div class="tw"><table class="t"><thead><tr><th>Q.tà</th><th>Condizione / lingua</th><th>Acquistata</th><th class="right">Costo</th><th class="hide-m">Note</th><th></th></tr></thead><tbody>
+      ${av.length ? `<div class="tw"><table class="t"><thead><tr><th>Q.tà</th><th>Condizione / lingua</th><th>Acquistata</th><th class="right">Costo</th><th class="right">Stima</th><th class="hide-m">Note</th><th></th></tr></thead><tbody>
       ${av.map(x => `<tr><td><b>${x.qty}</b></td><td>${attrs(x)}</td><td class="nowrap">${fdate(x.buy_date)}</td><td class="right nowrap">${x.lot_id ? lotLink(x) : eur(x.buy_price) + (x.qty > 1 ? ' <span class="small muted">cad.</span>' : '')}</td>
+        <td class="right nowrap">${(u => u == null ? '<span class="muted">—</span>' : eur(u) + (x.qty > 1 ? ' <span class="small muted">cad.</span>' : '') + (langFactor(x.language) !== 1 && mktUnit(c, x) != null ? `<div class="small muted">${esc(x.language)} ${(langFactor(x.language) - 1) * 100 > 0 ? '+' : ''}${Math.round((langFactor(x.language) - 1) * 100)}%</div>` : ''))(estCopy(c, x))}</td>
         <td class="hide-m small muted">${esc(x.notes || '')}</td>
         <td class="acts"><button class="btn sm ok" data-act="sell" data-id="${x.id}">Vendi</button> <button class="btn sm" data-act="editCopy" data-id="${x.id}" title="Modifica">✎</button> <button class="btn sm dan" data-act="delCopy" data-id="${x.id}" title="Elimina">🗑</button></td></tr>`).join('')}
       </tbody></table></div>` : `<div class="empty">Nessuna copia disponibile.</div>`}
@@ -1394,7 +1401,7 @@ function addCardForm(pre = {}){
       <div><label class="f">Rarità</label><input class="inp" name="rarity" list="dl-rar" value="${esc(base?.rarity || '')}"></div>
       <div><label class="f">Quantità</label><input class="inp" name="qty" type="number" min="1" value="1" required></div>
       <div><label class="f">Condizione</label><select class="inp" name="condition">${CONDS.map(c => opt(c, 'NM', `${c} – ${COND_LBL[c]}`)).join('')}</select></div>
-      <div><label class="f">Lingua</label><select class="inp" name="language">${opt('', '', '—')}${LANGS.map(l => opt(l, pre.lang || '')).join('')}</select></div>
+      <div><label class="f">Lingua</label><select class="inp" name="language">${opt('', '', '—')}${langOpts(pre.lang || '')}</select></div>
       <div><label class="f">Edizione</label><input class="inp" name="edition" list="dl-ed" placeholder="es. 1st Edition"></div>
       <div><label class="f">Data acquisto</label><input class="inp" name="buy_date" type="date" value="${today()}"></div>
     </div>
@@ -1558,7 +1565,7 @@ function editCopyForm(id){
   openModal(`Modifica copia · ${c.name}`, `<form id="ecp"><div class="fg">
     <div><label class="f">Quantità</label><input class="inp" name="qty" type="number" min="1" value="${x.qty}"></div>
     <div><label class="f">Condizione</label><select class="inp" name="condition">${CONDS.map(k => opt(k, x.condition, `${k} – ${COND_LBL[k]}`)).join('')}${x.condition && !CONDS.includes(x.condition) ? opt(x.condition, x.condition) : ''}</select></div>
-    <div><label class="f">Lingua</label><select class="inp" name="language">${opt('', x.language, '—')}${LANGS.map(l => opt(l, x.language)).join('')}${x.language && !LANGS.includes(x.language) ? opt(x.language, x.language) : ''}</select></div>
+    <div><label class="f">Lingua</label><select class="inp" name="language">${opt('', x.language, '—')}${langOpts(x.language)}${x.language && !LANGS.includes(x.language) ? opt(x.language, x.language) : ''}</select></div>
     <div><label class="f">Edizione</label><input class="inp" name="edition" list="dl-ed" value="${esc(x.edition || '')}"></div>
     <div><label class="f">Data acquisto</label><input class="inp" name="buy_date" type="date" value="${x.buy_date || ''}"></div>
     <div><label class="f">Lotto</label><select class="inp" name="lot">${opt('', x.lot_id, '— nessuno (singola)')}${lotOptions(x.lot_id)}</select></div>
@@ -1637,7 +1644,7 @@ function orderForm(pre = {}){
     const itemsTotal = () => sum(rows, r => num(r.price) || 0);
     const drawRows = () => {
       $('#orows', m).innerHTML = rows.length ? rows.map((r, i) => {
-        const x = S.copies.get(r.id), c = S.cards.get(x.card_id), est = estUnit(c.id);
+        const x = S.copies.get(r.id), c = S.cards.get(x.card_id), est = estCopy(c, x);
         return `<div class="orow" data-i="${i}">${thumbHtml(c)}<div class="grow" style="min-width:0"><b>${esc(c.name)}</b>
           <div class="small muted">${esc(c.expansion || '—')}${c.rarity ? ' · ' + esc(c.rarity) : ''} ${condB(x.condition)} ${x.language ? `<span class="b lang">${esc(x.language)}</span>` : ''} · ${x.lot_id ? 'da lotto' : 'pagata ' + eur(x.buy_price) + ' cad.'}${est != null ? ` · ${mktUnit(c, x) != null ? 'mercato' : 'di solito la vendi a'} ${eur(est)}` : ''}</div></div>
           <div class="oq"><label class="f">Q.tà <span style="font-weight:400">/ ${x.qty}</span></label><input class="inp" type="number" min="1" max="${x.qty}" value="${r.qty}" data-q></div>
@@ -1785,7 +1792,7 @@ function lotStats(l){
   const cs = lotCopies(l.id), so = cs.filter(c => c.status === 'venduto'), av = cs.filter(c => c.status !== 'venduto');
   const gross = sum(so, c => c.sell_price), earned = sum(so, c => netSell(c));
   let est = 0, unknown = 0;
-  av.forEach(c => { const u = estUnit(c.card_id); if (u != null) est += u * c.qty; else unknown += c.qty; });
+  av.forEach(c => { const u = estCopy(S.cards.get(c.card_id), c); if (u != null) est += u * c.qty; else unknown += c.qty; });
   return {copies: sum(cs, c => c.qty), sold: sum(so, c => c.qty), left: sum(av, c => c.qty), gross, earned, profit: earned - l.total_price,
     est, unknown, pct: l.total_price > 0 ? earned / l.total_price * 100 : 100};
 }
@@ -1813,7 +1820,7 @@ function pageLot(app, id){
   if (!l){ app.innerHTML = `<div class="panel empty">Lotto non trovato. <a href="#/lotti">Torna ai lotti</a></div>`; return; }
   const s = lotStats(l);
   const rows = lotCopies(id).map(x => ({x, c: S.cards.get(x.card_id)})).filter(r => r.c);
-  const av = rows.filter(r => r.x.status !== 'venduto').map(r => ({...r, est: mktUnit(r.c, r.x) ?? estUnit(r.c.id)})).sort((a, b) => (b.est ?? -1) * b.x.qty - (a.est ?? -1) * a.x.qty);
+  const av = rows.filter(r => r.x.status !== 'venduto').map(r => ({...r, est: estCopy(r.c, r.x)})).sort((a, b) => (b.est ?? -1) * b.x.qty - (a.est ?? -1) * a.x.qty);
   const so = rows.filter(r => r.x.status === 'venduto').sort((a, b) => (b.x.sell_date || '').localeCompare(a.x.sell_date || ''));
   const need = -s.profit;
   const msg = s.profit >= 0
@@ -1926,7 +1933,7 @@ function staleList(months, game){
   const lim = new Date(); lim.setMonth(lim.getMonth() - months); const limS = isoLocal(lim), now = Date.now();
   return [...S.copies.values()].filter(c => c.status !== 'venduto' && c.buy_date && c.buy_date <= limS)
     .map(c => ({c, card: S.cards.get(c.card_id)})).filter(x => x.card && (!game || x.card.game === game))
-    .map(x => { const u = estUnit(x.card.id); x.days = Math.floor((now - dpt(x.c.buy_date)) / 864e5);
+    .map(x => { const u = estCopy(x.card, x.c); x.days = Math.floor((now - dpt(x.c.buy_date)) / 864e5);
       x.est = u != null ? u * x.c.qty : null; x.cost = x.c.lot_id || x.c.buy_price == null ? null : x.c.buy_price * x.c.qty; x.val = x.est ?? x.cost ?? 0; return x; });
 }
 const ageTxt = d => d >= 365 ? `${Math.floor(d / 365)} ${Math.floor(d / 365) === 1 ? 'anno' : 'anni'}${d % 365 >= 30 ? ' e ' + Math.floor(d % 365 / 30) + ' mesi' : ''}` : d >= 60 ? `${Math.floor(d / 30)} mesi` : `${d} giorni`;
@@ -2346,6 +2353,34 @@ function feesModal(after){
     };
   }});
 }
+function langModal(){
+  const nEN = sum([...S.copies.values()].filter(c => c.language === 'EN' && c.status !== 'venduto'), c => c.qty);
+  openModal('Lingue e stima dei prezzi', `<form id="lgf">
+    <p class="muted small" style="margin-top:0">Il prezzo di mercato di Cardmarket è unico per tutte le lingue. Qui puoi dire quanto vale in più o in meno una copia in ciascuna lingua rispetto a quel prezzo (per esempio −15% per l'inglese americano). La correzione si applica a stime, lotti, giacenze, valore di magazzino e prezzi suggeriti.</p>
+    <div class="tw"><table class="t"><thead><tr><th>Lingua</th><th>Correzione sul prezzo di mercato</th></tr></thead><tbody>
+      ${LANGS.map(l => `<tr><td><span class="b lang">${l}</span> ${esc(LANG_LBL[l])}</td><td><div style="display:flex;gap:6px;align-items:center"><input class="inp" style="max-width:90px" data-l="${l}" inputmode="decimal" value="${(SET.langAdj || {})[l] ? String(SET.langAdj[l]).replace('.', ',') : ''}" placeholder="0"><span class="muted">%</span></div></td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="fg" style="margin-top:14px"><div class="full"><label class="f">Le carte in inglese dei CSV di Cardmarket sono…</label>
+      <select class="inp" name="en">${['EN-EU', 'EN-US', 'EN'].map(l => opt(l, SET.enDefault || 'EN-EU', `${l} – ${LANG_LBL[l]}`)).join('')}</select>
+      <div class="small muted" style="margin-top:3px">Cardmarket non distingue europeo e americano: questa è la scelta predefinita all'import, poi puoi cambiare la singola copia.</div></div></div>
+    ${nEN ? `<div class="note" style="margin-top:12px">${nEN} ${nEN === 1 ? 'copia disponibile ha' : 'copie disponibili hanno'} ancora la lingua “EN” generica. <label><input type="checkbox" name="conv"> Convertile in</label> <select class="inp" name="convto" style="width:auto;display:inline-block">${['EN-EU', 'EN-US'].map(l => opt(l, 'EN-EU')).join('')}</select></div>` : ''}
+    <div class="mfoot"><button type="button" class="btn" data-c>Annulla</button><button class="btn pri">Salva</button></div></form>`, {wide: true, onMount: m => {
+    $('[data-c]', m).onclick = closeModal;
+    $('#lgf', m).onsubmit = async e => {
+      e.preventDefault(); const E = n => e.target.elements[n];
+      const adj = {}; $$('[data-l]', m).forEach(i => { const v = num(i.value); if (v) adj[i.dataset.l] = v; });
+      SET.langAdj = adj; SET.enDefault = E('en').value;
+      const conv = E('conv')?.checked ? E('convto').value : null;
+      await saveSettings(); closeModal(); index();
+      if (conv) await commit(`Lingua EN convertita in ${conv}`, async tx => {
+        const ids = [...S.copies.values()].filter(c => c.language === 'EN' && c.status !== 'venduto').map(c => c.id);
+        await tx.update('copies', ids, {language: conv});
+        for (const id of ids) await mergeTwin(tx, id);
+      });
+      else { toast('Impostazioni salvate'); render(); }
+    };
+  }});
+}
 function settingsModal(){
   const cfg = getCfg();
   openModal('Impostazioni', `
@@ -2353,10 +2388,11 @@ function settingsModal(){
     ${S.mode === 'supabase' ? `<dt>Progetto</dt><dd class="small">${esc(cfg?.url || '')}</dd>` : ''}
     <dt>Contenuto</dt><dd>${S.cards.size} carte · ${S.copies.size} righe · ${S.lots.size} lotti · ${S.orders.size} vendite</dd>
     <dt>Commissioni</dt><dd>${Object.entries(SET.fees).filter(([, v]) => v.pct || v.fixed).map(([p, v]) => `${esc(p)} ${String(v.pct).replace('.', ',')}%`).join(' · ') || 'nessuna'} · spedizione ${eur(SET.shipCost)}</dd></dl>
-    <div style="margin-top:12px"><button class="btn" id="fees">💶 Commissioni e spedizioni…</button></div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="fees">💶 Commissioni e spedizioni…</button><button class="btn" id="langs">🌐 Lingue e stima prezzi…</button></div>
     <div class="mfoot">${cfg?.fixed ? '' : '<button class="btn dan" id="chg">Cambia collegamento</button>'}<button class="btn" id="rel">Ricarica dati</button><button class="btn pri" id="out">${S.mode === 'local' ? 'Esci' : 'Esci dall\'account'}</button></div>`,
   {onMount: m => {
     $('#fees', m).onclick = () => feesModal();
+    $('#langs', m).onclick = () => langModal();
     $('#rel', m).onclick = async () => { closeModal(); await loadAll(); await loadSettings(); render(); toast('Dati ricaricati'); };
     $('#out', m).onclick = async () => { closeModal(); if (S.mode === 'supabase') await sb.auth.signOut(); S.user = null; undoStack.length = 0; if (S.mode === 'local') setCfg(null); render(); };
     $('#chg', m) && ($('#chg', m).onclick = async () => { closeModal(); if (S.mode === 'supabase') await sb.auth.signOut(); setCfg(null); S.user = null; sb = null; undoStack.length = 0; render(); });
