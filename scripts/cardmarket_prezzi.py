@@ -146,7 +146,11 @@ def add_rarities(gid, rows, exp, ygo, pkm):
             m = re.search(r"\(V\.\s*\d+\s*-\s*([^)]+)\)", r[1])
             r.extend([m.group(1).strip() if m else "", ""])
         if gid == 3 and en:
-            prints = ygo.get(bn, {}).get(en, [])
+            sets = ygo.get(bn, {})
+            prints = sets.get(en, [])
+            if not prints and len(en) >= 4:  # nome del set abbreviato su Cardmarket (es. "... Legend" / "... Legend Collection")
+                cand = [k for k in sets if k.startswith(en + " ") or (len(k) >= 6 and en.startswith(k + " "))]
+                if len(cand) == 1: prints = sets[cand[0]]
             rars = list(dict.fromkeys(p[0] for p in prints))
             for r in rs:
                 if r[8]:
