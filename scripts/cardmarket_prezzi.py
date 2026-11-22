@@ -148,7 +148,7 @@ def add_rarities(gid, rows, exp, ygo, pkm):
         if gid == 3 and en:
             sets = ygo.get(bn, {})
             prints = sets.get(en, [])
-            if not prints and len(en) >= 4:  # nome del set abbreviato su Cardmarket (es. "... Legend" / "... Legend Collection")
+            if not prints and len(en) >= 4 and not re.search(r"\b(japanese|ocg|korean|asian|chinese)\b", en):  # nome del set abbreviato su Cardmarket (es. "... Legend" / "... Legend Collection")
                 cand = [k for k in sets if k.startswith(en + " ") or (len(k) >= 6 and en.startswith(k + " "))]
                 if len(cand) == 1: prints = sets[cand[0]]
             rars = list(dict.fromkeys(p[0] for p in prints))
