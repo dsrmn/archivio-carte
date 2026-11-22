@@ -1196,7 +1196,6 @@ function pageHome(app){
     ${statTiles(t)}
     ${(() => { const mo = SET.stale || 6, st = staleList(mo, ''); if (!st.length) return '';
       return `<a class="panel banner" href="#/giacenze"><span style="font-size:22px">⏳</span><div class="grow"><b>${sum(st, x => x.c.qty)} copie ferme da più di ${mo} mesi</b><div class="small muted">valore stimato ${eur(sum(st, x => x.est || 0))} · guarda quali ribassare o vendere in blocco</div></div><span class="btn sm">Vedi giacenze ›</span></a>`; })()}
-    ${movers()}
     <div class="panel"><h2>Giochi</h2><div class="games">
       ${IX.games.map(g => { const gt = totals(g); const ex = new Set([...S.cards.values()].filter(c => c.game === g).map(c => c.expansion)).size;
         return `<a class="game" href="#/g/${enc(g)}"><div class="gicon ${gameCls(g)}">${esc(gameAbbr(g))}</div><div><b>${esc(g)}</b><div class="small muted">${gt.avail} copie · ${ex} espansioni</div><div class="small">${signEur(gt.net - gt.spent)}</div></div></a>`; }).join('')}
