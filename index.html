@@ -861,6 +861,30 @@ function cmPanel(card){
       <a class="btn sm" href="${cmUrl(card, p)}" target="_blank" rel="noopener">Apri su Cardmarket ↗</a><button class="btn sm" data-act="cmPick" data-id="${card.id}">Cambia</button></div>
     <div class="cmgrid"><div><span>Trend</span><b>${eur(p.trend)}</b>${mktArrow(p)}</div><div><span>Media 30 gg</span><b>${eur(p.avg30)}</b></div><div><span>Media 7 gg</span><b>${eur(p.avg7)}</b></div><div><span>Da</span><b>${eur(p.low)}</b></div>${p.trendFoil ? `<div><span>Trend foil</span><b>${eur(p.trendFoil)}</b></div>` : ''}</div></div>`;
 }
+/** nomi di carte del catalogo Cardmarket che iniziano/contengono il testo */
+function cmNameSuggest(game, q, limit = 10){
+  const gid = CM_GAMES[game], ix = CM.idx[gid], f = cmBase(q); if (!ix || f.length < 2) return [];
+  const starts = [], inc = [];
+  for (const [k, ps] of ix.byName){
+    if (k.startsWith(f)) starts.push([k, ps]); else if (inc.length < 60 && k.includes(f)) inc.push([k, ps]);
+    if (starts.length >= 200) break;
+  }
+  return [...starts.sort((a, b) => a[0].length - b[0].length), ...inc.sort((a, b) => a[0].length - b[0].length)].slice(0, limit)
+    .map(([k, ps]) => ({label: cmLabel(ps[0], gid), ps}));
+}
+const cmLabel = (p, gid) => clean(cmDisplayName(p.name, gid).replace(/\s*\((?:[A-Z]{1,6}\d{0,3}[a-z]?-[A-Z]{0,3}\d{1,4}[a-z]?|\d+\/\d+|V\.\s*\d+[^)]*)\)/gi, ''));
+/** tutte le espansioni (stampe) Cardmarket di una carta, dal nome */
+function cmPrintings(game, name){
+  const gid = CM_GAMES[game], ix = CM.idx[gid]; if (!ix || !clean(name)) return [];
+  const list = (ix.byName.get(cmBase(name)) || []).map(p => ({p, named: !!ix.exp[p.exp], expansion: ix.exp[p.exp] || `Altra espansione (n. ${p.exp})`, rarity: p.rar,
+    variant: (cmQuotes(p.name).match(/\(([^)]*)\)\s*$/) || [])[1] || ''}))
+    .sort((a, b) => (b.named - a.named) || a.expansion.localeCompare(b.expansion) || (mktPrice(a.p) ?? 0) - (mktPrice(b.p) ?? 0));
+  const seen = {};
+  list.forEach(x => { const k = x.expansion + '|' + x.variant; seen[k] = (seen[k] || 0) + 1; x.n = seen[k]; });
+  list.forEach(x => { if (seen[x.expansion + '|' + x.variant] > 1) x.variant = [x.variant, 'versione ' + x.n].filter(Boolean).join(' · '); });
+  return list;
+}
+
 function cmPickForm(cardId){
   const card = S.cards.get(cardId), gid = CM_GAMES[card.game], ix = CM.idx[gid];
   if (!ix){ toast('Listino Cardmarket non ancora caricato', 'err'); return; }
@@ -1328,7 +1352,7 @@ function lotOptions(sel){
 function addCardForm(pre = {}){
   const base = pre.card ? S.cards.get(pre.card) : null;
   const game = base?.game || pre.game || F.game || GAMES[0];
-  const st = {sets: null, image: base?.image_url || null};
+  const st = {sets: null, image: base?.image_url || null, cm_id: base?.cm_id || null};
   const html = `<form id="acf">
     <div class="fg">
       <div><label class="f">Gioco</label><select class="inp" name="game">${IX.games.map(g => opt(g, game)).join('')}${opt('__new', '', '＋ Altro gioco…')}</select></div>
@@ -1365,6 +1389,8 @@ function addCardForm(pre = {}){
     const curGame = () => E('game').value;
     const fillRar = () => { $('#dl-rar', m).innerHTML = [...new Set([...(RARITIES[curGame()] || []), ...[...S.cards.values()].filter(c => c.game === curGame()).map(c => c.rarity)])].filter(Boolean).map(v => `<option value="${esc(v)}">`).join(''); };
     fillRar();
+    const ensureCm = () => { const gid = CM_GAMES[curGame()]; if (gid && !CM.idx[gid]) cmLoad(gid).catch(() => {}); };
+    ensureCm();
     E('game').onchange = async () => {
       if (E('game').value === '__new'){
         const n = prompt('Nome del gioco (es. Magic, Lorcana, Dragon Ball):'); const g = gameName(n);
@@ -1372,7 +1398,7 @@ function addCardForm(pre = {}){
         if (![...E('game').options].some(o => o.value === g)) E('game').insertAdjacentHTML('afterbegin', opt(g, g));
         E('game').value = g;
       }
-      st.sets = null; fillRar(); hint();
+      st.sets = null; st.cm_id = null; fillRar(); hint(); ensureCm();
     };
     const hint = () => {
       const ex = findCard(curGame(), E('expansion').value, E('name').value, E('rarity').value);
@@ -1380,17 +1406,22 @@ function addCardForm(pre = {}){
       if (ex && E('name').value.trim()){ const s = cardStats(ex.id); h.hidden = false; h.innerHTML = `Questa carta è già nel tuo archivio (${s.avail} disponibili): le nuove copie finiranno nella stessa riga.`; } else h.hidden = true;
     };
     ['name', 'expansion', 'rarity'].forEach(n => E(n).addEventListener('change', hint));
+    ['name', 'expansion'].forEach(n => E(n).addEventListener('input', () => { st.cm_id = null; }));
     autocomplete(E('name'), async (q, cb) => {
       const f2 = fold(q), g = curGame();
       const seen = new Set();
       const local = [...S.cards.values()].filter(c => c.game === g && (!f2 || fold(c.name).includes(f2)))
         .filter(c => { const k = norm(c.name); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 8)
         .map(c => ({label: c.name, sub: 'Nel tuo archivio', value: c.name, group: 'Il tuo archivio', localName: true}));
-      cb(local);
-      if (q.length >= 2){ const rem = await remoteNames(g, q); cb([...local, ...rem.filter(r => !seen.has(norm(r.value))).slice(0, 12)]); }
+      const cmn = cmNameSuggest(g, q, 10).filter(x => !seen.has(norm(x.label))).map(x => { seen.add(norm(x.label));
+        const n = new Set(x.ps.map(p => p.exp)).size; return {label: x.label, sub: `${n} ${n === 1 ? 'espansione' : 'espansioni'} su Cardmarket`, value: x.label, group: 'Catalogo Cardmarket'}; });
+      cb([...local, ...cmn]);
+      if (q.length >= 3 && (!CM.idx[CM_GAMES[g]] || g === 'Yu-Gi-Oh!')){ const rem = await remoteNames(g, q); if (!CM.idx[CM_GAMES[g]]) cb([...local, ...cmn, ...rem.filter(r => !seen.has(norm(r.value))).slice(0, 12)]); else st.remote = rem; }
     }, it => {
+      st.cm_id = null;
       E('name').value = it.value;
       st.sets = it.sets || null;
+      if (!it.sets && !it.localName && curGame() === 'Yu-Gi-Oh!') remoteNames('Yu-Gi-Oh!', it.value).then(r => { const x = r.find(y => fold(y.value) === fold(it.value)); if (x && fold(E('name').value) === fold(it.value)){ st.sets = x.sets; if (!st.image) st.image = x.image || null; } }).catch(() => {});
       if (it.localName){
         const vars = [...S.cards.values()].filter(c => c.game === curGame() && norm(c.name) === norm(it.value));
         st.sets = vars.map(c => ({expansion: c.expansion, rarity: c.rarity, code: 'nel tuo archivio', image: c.image_url}));
@@ -1403,14 +1434,23 @@ function addCardForm(pre = {}){
     });
     autocomplete(E('expansion'), async (q, cb) => {
       const f2 = fold(q), g = curGame(), out = [];
-      if (st.sets) st.sets.filter(s => !f2 || fold(`${s.expansion} ${s.rarity} ${s.code}`).includes(f2)).slice(0, 40)
+      const prints = cmPrintings(g, E('name').value);
+      if (prints.length){
+        const ygo = new Map(((st.sets && st.sets[0] && st.sets[0].code !== 'nel tuo archivio') ? st.sets : []).map(s => [fold(s.expansion), s.rarity]));
+        prints.filter(x => !f2 || fold(`${x.expansion} ${x.rarity} ${x.variant}`).includes(f2)).slice(0, 120).forEach(x => {
+          const rar = x.rarity || ygo.get(fold(x.expansion)) || '';
+          out.push({label: x.expansion, sub: [rar, x.variant && !x.variant.includes(rar || '~') ? x.variant : '', mktPrice(x.p) != null ? 'mercato ' + eur(mktPrice(x.p)) : ''].filter(Boolean).join(' · '),
+            set: {expansion: x.expansion, rarity: rar, cm_id: x.p.id}, group: `Espansioni di questa carta su Cardmarket (${prints.length})`});
+        });
+      }
+      if (st.sets && (!prints.length || st.sets[0]?.code === 'nel tuo archivio')) st.sets.filter(s => !f2 || fold(`${s.expansion} ${s.rarity} ${s.code}`).includes(f2)).slice(0, 40)
         .forEach(s => out.push({label: s.expansion, sub: `${s.rarity || '—'}${s.code ? ' · ' + s.code : ''}`, set: s, group: 'Stampe di questa carta'}));
       const exps = [...new Set([...S.cards.values()].filter(c => c.game === g).map(c => c.expansion))].filter(e => e && (!f2 || fold(e).includes(f2))).sort().slice(0, 10);
       exps.forEach(e => out.push({label: e, value: e, group: 'Espansioni del tuo archivio'}));
       cb(out);
     }, it => {
-      if (it.set){ E('expansion').value = it.set.expansion; E('rarity').value = it.set.rarity || E('rarity').value; if (it.set.image) st.image = it.set.image; }
-      else E('expansion').value = it.value;
+      if (it.set){ E('expansion').value = it.set.expansion; E('rarity').value = it.set.rarity || E('rarity').value; if (it.set.image) st.image = it.set.image; st.cm_id = it.set.cm_id || null; }
+      else { E('expansion').value = it.value; st.cm_id = null; }
       hint(); E('rarity').focus();
     });
     const setType = v => { $$('#ptype button', m).forEach(b => b.classList.toggle('on', b.dataset.v === v)); $('#p-single', m).hidden = v !== 'single'; $('#p-lot', m).hidden = v !== 'lot'; };
@@ -1423,7 +1463,7 @@ function addCardForm(pre = {}){
       e.preventDefault();
       const name = clean(E('name').value); if (!name) return;
       const isLot = $('#ptype button.on', m).dataset.v === 'lot';
-      const d = {game: curGame(), name, expansion: clean(E('expansion').value), rarity: clean(E('rarity').value), image_url: st.image};
+      const d = {game: curGame(), name, expansion: clean(E('expansion').value), rarity: clean(E('rarity').value), image_url: st.image, cm_id: st.cm_id || undefined};
       const qty = Math.max(1, parseInt(E('qty').value) || 1);
       let lotId = isLot ? E('lot').value : null;
       if (isLot && lotId === '__new' && !clean(E('lot_desc').value)){ toast('Scrivi una descrizione per il nuovo lotto', 'err'); E('lot_desc').focus(); return; }
