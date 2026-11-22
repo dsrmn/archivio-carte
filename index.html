@@ -986,12 +986,29 @@ async function cmImportFlow(aoa, fname){
     <div class="tw" style="margin-top:10px;max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:6px"><table class="t" id="cmt"></table></div>
     <div id="cmsum" class="small muted" style="margin-top:8px"></div>
     <div class="mfoot" style="border:0"><button class="btn" id="impx">Annulla</button><button class="btn pri" id="cmgo">Importa</button></div>`;
-  let kind = 'buy';
+  let kind = 'buy', mode = 'single', lotTouched = false;
+  const lotsOpt = [...S.lots.values()].sort((a, b) => (b.buy_date || '').localeCompare(a.buy_date || '')).map(l => opt(l.id, '', `${fdate(l.buy_date)} · ${l.description} (${eur(l.total_price)})`)).join('');
+  const buyTotal = () => round2(tot + (num($('#cmship')?.value) || 0));
+  const drawMode = () => {
+    const el = $('#cmlot'); if (!el) return;
+    el.innerHTML = mode === 'single' ? '' : mode === 'newlot'
+      ? `<div class="fg"><div class="full"><label class="f">Descrizione lotto</label><input class="inp" id="cmld" value="${esc(ship ? 'Ordine Cardmarket n. ' + ship : 'Ordine Cardmarket')}"></div>
+         <div><label class="f">Prezzo totale del lotto €</label><input class="inp" id="cmlp" inputmode="decimal" value="${fmtIn(buyTotal())}"><div class="small muted">carte + spedizione</div></div></div>`
+      : (lotsOpt ? `<div class="fg"><div class="full"><label class="f">Lotto</label><select class="inp" id="cmls">${lotsOpt}</select></div>
+         <div class="full"><label class="small"><input type="checkbox" id="cmladd" checked> aggiungi il costo di quest'ordine (${eur(buyTotal())}) al prezzo del lotto</label></div></div>`
+         : '<div class="note">Non hai ancora lotti: scegli “Nuovo lotto”.</div>');
+    $('#cmlp') && $('#cmlp').addEventListener('input', () => { lotTouched = true; });
+  };
   const draw = () => {
+    const keep = {d: $('#cmd')?.value, sh: $('#cmship')?.value};
     $('#cmf').innerHTML = kind === 'buy'
-      ? `<div><label class="f">Data acquisto</label><input class="inp" type="date" id="cmd" value="${today()}"></div><div><label class="f">Spedizione pagata €</label><input class="inp" id="cmship" inputmode="decimal" placeholder="0,00"><div class="small muted">viene divisa sul costo delle carte</div></div>`
+      ? `<div><label class="f">Data acquisto</label><input class="inp" type="date" id="cmd" value="${today()}"></div><div><label class="f">Spedizione pagata €</label><input class="inp" id="cmship" inputmode="decimal" placeholder="0,00"><div class="small muted" id="cmshiph">${mode === 'single' ? 'viene divisa sul costo delle carte' : 'si aggiunge al costo del lotto'}</div></div>
+         <div class="full"><label class="f">Registra come</label><div class="seg" id="cmm"><button type="button" data-v="single" class="${mode === 'single' ? 'on' : ''}">Carte singole</button><button type="button" data-v="newlot" class="${mode === 'newlot' ? 'on' : ''}">Nuovo lotto</button><button type="button" data-v="lot" class="${mode === 'lot' ? 'on' : ''}">Lotto esistente</button></div></div>
+         <div class="full" id="cmlot"></div>`
       : `<div><label class="f">Data vendita</label><input class="inp" type="date" id="cmd" value="${today()}"></div><div><label class="f">Spedizione pagata dall'acquirente €</label><input class="inp" id="cmsc" inputmode="decimal" value="${fmtIn(SET.shipCharged)}"></div>
          <div><label class="f">Tuo costo spedizione €</label><input class="inp" id="cmsk" inputmode="decimal" value="${fmtIn(SET.shipCost)}"></div><div><label class="f">Commissione €</label><input class="inp" id="cmfee" inputmode="decimal" value="${fmtIn(feeFor('Cardmarket', tot))}"></div>`;
+    if (keep.d && $('#cmd')) $('#cmd').value = keep.d;
+    if (keep.sh && $('#cmship')) $('#cmship').value = keep.sh;
     const taken = new Map();
     const st = rows.map(x => ({x, s: kind === 'sell' && x.p ? cmFindStock(x, taken) : null}));
     $('#cmt').innerHTML = `<thead><tr><th>Carta</th><th>Espansione</th><th>Rarità</th><th>Q.tà</th><th></th><th class="right">Prezzo</th><th class="right">Mercato</th>${kind === 'sell' ? '<th>In magazzino</th>' : ''}</tr></thead><tbody>
@@ -999,8 +1016,13 @@ async function cmImportFlow(aoa, fname){
         <td>${condB(x.condition)} ${x.language ? `<span class="b lang">${esc(x.language)}</span>` : ''}</td><td class="right">${eur(x.unit)}</td><td class="right">${x.p ? eur(mktPrice(x.p)) : ''}</td>
         ${kind === 'sell' ? `<td>${!s ? '' : s.missing ? `<span class="neg">${s.missing === x.qty ? 'non trovata' : 'mancano ' + s.missing}</span>` : '<span class="b st-d">ok</span>'}</td>` : ''}</tr>`).join('')}</tbody>`;
     const miss = kind === 'sell' ? sum(st, ({x, s}) => s ? s.missing : x.qty) : 0;
+    if (kind === 'buy'){
+      drawMode();
+      $$('#cmm button').forEach(b => b.onclick = () => { mode = b.dataset.v; draw(); });
+      $('#cmship').addEventListener('input', () => { if (!lotTouched && $('#cmlp')) $('#cmlp').value = fmtIn(buyTotal()); const c = $('#cmladd'); if (c) c.parentElement.lastChild.textContent = ` aggiungi il costo di quest'ordine (${eur(buyTotal())}) al prezzo del lotto`; });
+    }
     $('#cmsum').innerHTML = kind === 'buy'
-      ? `Verranno aggiunte ${sum(rows.filter(x => x.p), x => x.qty)} carte al magazzino come acquisti singoli${tag ? ` (con nota “${tag}”)` : ''}.`
+      ? `Verranno aggiunte ${sum(rows.filter(x => x.p), x => x.qty)} carte al magazzino ${mode === 'single' ? 'come acquisti singoli' : mode === 'newlot' ? 'in un nuovo lotto (costo condiviso)' : 'nel lotto scelto (costo condiviso)'}${tag ? ` (con nota “${tag}”)` : ''}.`
       : `Verrà creata una vendita Cardmarket con ${nq - miss} carte.${miss ? ` <span class="neg">${miss} carte non sono nel tuo magazzino e verranno saltate.</span>` : ''}`;
     $('#cmgo').textContent = kind === 'buy' ? 'Aggiungi al magazzino' : 'Registra la vendita';
     return st;
@@ -1013,15 +1035,26 @@ async function cmImportFlow(aoa, fname){
     const ok = rows.filter(x => x.p);
     if (kind === 'buy'){
       const shipTot = num($('#cmship').value) || 0, base = sum(ok, x => x.unit * x.qty);
-      const done = await commit(`Importato acquisto Cardmarket: ${sum(ok, x => x.qty)} carte`, async tx => {
+      let lotId = null, lotNew = null, lotAdd = 0;
+      if (mode === 'newlot'){
+        const d = clean($('#cmld').value); if (!d){ toast('Scrivi una descrizione per il lotto', 'err'); $('#cmld').focus(); return; }
+        lotId = uid(); lotNew = {id: lotId, description: d, buy_date: date, total_price: round2(num($('#cmlp').value) ?? buyTotal())};
+      } else if (mode === 'lot'){
+        if (!$('#cmls')){ toast('Non hai ancora lotti', 'err'); return; }
+        lotId = $('#cmls').value; if ($('#cmladd').checked) lotAdd = buyTotal();
+      }
+      const where = mode === 'single' ? '' : mode === 'newlot' ? ` nel lotto “${lotNew.description}”` : ` nel lotto “${S.lots.get(lotId).description}”`;
+      const done = await commit(`Importato acquisto Cardmarket: ${sum(ok, x => x.qty)} carte${where}`, async tx => {
+        if (lotNew) await tx.insert('lots', lotNew);
+        if (lotAdd) await tx.update('lots', lotId, {total_price: round2(S.lots.get(lotId).total_price + lotAdd)});
         for (const x of ok){
           const cid = await ensureCard(tx, {game: x.game, expansion: x.expansion, name: x.name, rarity: x.rarity, cm_id: x.p.id});
           const extra = base ? shipTot * x.unit / base : 0;
-          await addCopy(tx, {card_id: cid, lot_id: null, qty: x.qty, condition: x.condition, edition: x.edition, language: x.language, buy_date: date,
-            buy_price: round2(x.unit + extra), notes: [x.notes, tag].filter(Boolean).join(' · ') || null});
+          await addCopy(tx, {card_id: cid, lot_id: lotId, qty: x.qty, condition: x.condition, edition: x.edition, language: x.language, buy_date: date,
+            buy_price: lotId ? null : round2(x.unit + extra), notes: [x.notes, tag].filter(Boolean).join(' · ') || null});
         }
       });
-      if (done) location.hash = '#/collezione';
+      if (done) location.hash = lotId ? '#/lotto/' + lotId : '#/collezione';
     } else {
       if (S.noOrders){ upgradeModal(); return; }
       const taken = new Map(), plan = ok.map(x => ({x, s: cmFindStock(x, taken)})).filter(r => r.s.alloc.length);
