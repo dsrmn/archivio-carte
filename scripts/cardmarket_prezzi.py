@@ -7,7 +7,7 @@ Formato di uscita:
 {
   "game": "Yu-Gi-Oh!", "idGame": 3, "createdAt": "...",
   "exp": {"<idExpansion>": "<nome espansione>", ...},
-  "cols": ["id","name","exp","trend","avg30","low","avg7","trendFoil","rar","code"],
+  "cols": ["id","name","exp","trend","avg30","low","avg7","trendFoil","rar","code","img"],
   "p": [[idProduct, "nome", idExpansion, trend, avg30, low, avg7, trendFoil], ...]
 }
 """
@@ -89,6 +89,9 @@ def version_no(n):
     return int(m.group(1)) if m else 0
 
 
+YGO_IMG = {}   # nome carta -> id immagine ufficiale (YGOPRODeck)
+
+
 def ygo_sets():
     """nome carta -> {nome set: [(rarità, codice)]} da YGOPRODeck"""
     try:
@@ -98,6 +101,8 @@ def ygo_sets():
         return {}
     out = {}
     for c in d.get("data", []):
+        imgs = c.get("card_images") or []
+        YGO_IMG[fold(c["name"])] = imgs[0]["id"] if imgs else c.get("id")
         m = out.setdefault(fold(c["name"]), {})
         for st in c.get("card_sets") or []:
             m.setdefault(fold(st.get("set_name")), []).append((st.get("set_rarity") or "", st.get("set_code") or ""))
@@ -126,7 +131,7 @@ def pkm_sets():
         for c in json.loads(z.read(n)):
             num = c.get("number", "")
             code = f"{st.get('ptcgoCode') or sid.upper()} {num}".strip()
-            out.setdefault((fold(st.get("name", sid)), fold(c["name"])), []).append((num, c.get("rarity") or "", code))
+            out.setdefault((fold(st.get("name", sid)), fold(c["name"])), []).append((num, c.get("rarity") or "", code, f"{sid}/{num}"))
     for k in out:
         out[k].sort(key=lambda x: (int(re.sub(r"\D", "", x[0]) or 0), x[0]))
     print("Database Pokémon:", len(out), "gruppi carta/set")
@@ -144,7 +149,9 @@ def add_rarities(gid, rows, exp, ygo, pkm):
         rs.sort(key=lambda r: (version_no(r[1]), r[0]))
         for r in rs:
             m = re.search(r"\(V\.\s*\d+\s*-\s*([^)]+)\)", r[1])
-            r.extend([m.group(1).strip() if m else "", ""])
+            r.extend([m.group(1).strip() if m else "", "", ""])
+            if gid == 3 and bn in YGO_IMG:
+                r[10] = str(YGO_IMG[bn])
         if gid == 3 and en:
             sets = ygo.get(bn, {})
             prints = sets.get(en, [])
@@ -166,7 +173,7 @@ def add_rarities(gid, rows, exp, ygo, pkm):
             prints = pkm.get((en, bn), [])
             if prints and len(prints) == len(rs):
                 for r, p in zip(rs, prints):
-                    r[8] = r[8] or p[1]; r[9] = p[2]
+                    r[8] = r[8] or p[1]; r[9] = p[2]; r[10] = p[3]
             elif prints:
                 rars = list(dict.fromkeys(p[1] for p in prints if p[1]))
                 for r in rs:
@@ -200,7 +207,7 @@ def main():
                          r2(g.get("low")), r2(g.get("avg7")), r2(g.get("trend-foil"))])
         n_rar = add_rarities(gid, rows, exp, ygo, pkm)
         doc = {"game": gname, "idGame": gid, "createdAt": prices.get("createdAt") or singles.get("createdAt"),
-               "exp": exp, "cols": ["id", "name", "exp", "trend", "avg30", "low", "avg7", "trendFoil", "rar", "code"], "p": rows}
+               "exp": exp, "cols": ["id", "name", "exp", "trend", "avg30", "low", "avg7", "trendFoil", "rar", "code", "img"], "p": rows}
         path = os.path.join(OUT, f"cm_{gid}.json")
         with open(path, "w", encoding="utf-8") as f:
             json.dump(doc, f, ensure_ascii=False, separators=(",", ":"))
