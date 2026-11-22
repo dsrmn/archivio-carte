@@ -220,6 +220,12 @@ a.btn.cmlink{border-color:#1f4f8f;color:#8fb4ff}a.btn.cmlink:hover{background:#1
 .ac div.it small{display:block;color:var(--muted);font-size:11.5px}
 .ac .hd{padding:5px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);background:var(--card)}
 
+/* suggerimenti con espansione e rarità */
+.ac small .acx{color:var(--text);font-weight:600}
+.ac small .acr{display:inline-block;margin-left:4px;padding:0 5px;border-radius:3px;background:#1d2c4a;color:#a9c4ff;font-weight:600;font-size:11px}
+.ac small .acr.q{background:#3a2a12;color:#ffbf5e}
+.ac{max-height:min(420px,60vh)}
+
 /* toast */
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:90;display:flex;flex-direction:column;gap:8px;align-items:center}
 .tst{background:#263248;border:1px solid #34425c;color:#fff;padding:10px 14px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.25);display:flex;gap:12px;align-items:center;max-width:92vw}
@@ -618,7 +624,7 @@ function autocomplete(input, source, onPick){
     let html = '', lastG = null;
     list.forEach((it, i) => {
       if (it.group && it.group !== lastG){ html += `<div class="hd">${esc(it.group)}</div>`; lastG = it.group; }
-      html += `<div class="it" data-i="${i}">${esc(it.label)}${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</div>`;
+      html += `<div class="it" data-i="${i}">${esc(it.label)}${it.subHtml ? `<small>${it.subHtml}</small>` : it.sub ? `<small>${esc(it.sub)}</small>` : ''}</div>`;
     });
     box.innerHTML = html;
   };
@@ -929,6 +935,23 @@ function cmPrintings(game, name){
   list.forEach(x => { if (seen[x.expansion + '|' + x.variant] > 1) x.variant = [x.variant, 'versione ' + x.n].filter(Boolean).join(' · '); });
   return list;
 }
+
+/** stampe che corrispondono a "nome carta [parole di set, codice o rarità]" */
+function cmSearchPrintings(game, q, limit = 40){
+  const words = fold(cmQuotes(q)).replace(/[^a-z0-9 ]/g, ' ').split(' ').filter(Boolean);
+  for (let k = words.length; k >= 1; k--){
+    const rest = words.slice(k), names = cmNameSuggest(game, words.slice(0, k).join(' '), rest.length ? 8 : 4);
+    if (!names.length) continue;
+    const out = [];
+    for (const n of names) for (const x of cmPrintings(game, n.label)){
+      const t = fold(`${x.expansion} ${x.rarAll} ${x.code} ${x.variant}`).replace(/[^a-z0-9 ]/g, ' ');
+      if (rest.every(w => t.includes(w))) out.push({...x, name: n.label});
+    }
+    if (out.length) return out.slice(0, limit);
+  }
+  return [];
+}
+const rarLabel = x => x.rarity ? `◆ ${x.rarity}` : x.rarAll ? `◆ ${x.rarAll} (scegli in base al prezzo)` : 'rarità non indicata';
 
 function cmPickForm(cardId){
   const card = S.cards.get(cardId), gid = CM_GAMES[card.game], ix = CM.idx[gid];
@@ -1551,17 +1574,33 @@ function addCardForm(pre = {}){
     ['name', 'expansion', 'rarity'].forEach(n => E(n).addEventListener('change', hint));
     ['name', 'expansion'].forEach(n => E(n).addEventListener('input', () => { st.cm_id = null; }));
     autocomplete(E('name'), async (q, cb) => {
-      const f2 = fold(q), g = curGame();
+      const f2 = fold(q), g = curGame(), words = f2.split(' ').filter(Boolean);
       const seen = new Set();
-      const local = [...S.cards.values()].filter(c => c.game === g && (!f2 || fold(c.name).includes(f2)))
-        .filter(c => { const k = norm(c.name); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 8)
-        .map(c => ({label: c.name, sub: 'Nel tuo archivio', value: c.name, group: 'Il tuo archivio', localName: true}));
-      const cmn = cmNameSuggest(g, q, 10).filter(x => !seen.has(norm(x.label))).map(x => { seen.add(norm(x.label));
-        const n = new Set(x.ps.map(p => p.exp)).size; return {label: x.label, sub: `${n} ${n === 1 ? 'espansione' : 'espansioni'} su Cardmarket`, value: x.label, group: 'Catalogo Cardmarket'}; });
+      // le tue carte: una riga per ogni slot (nome + espansione + rarità)
+      const local = [...S.cards.values()].filter(c => c.game === g && words.length && words.every(w => fold(`${c.name} ${c.expansion} ${c.rarity}`).includes(w)))
+        .sort((a, b) => a.name.localeCompare(b.name, 'it') || a.expansion.localeCompare(b.expansion, 'it')).slice(0, 8)
+        .map(c => { seen.add(c.cm_id || keyOf(c)); const n = sum(copiesOf(c.id).filter(x => x.status !== 'venduto'), x => x.qty);
+          return {label: c.name, subHtml: `<b class="acx">${esc(c.expansion || '—')}</b> <span class="acr">${esc(c.rarity || 'rarità non indicata')}</span> · ${n} ${n === 1 ? 'disponibile' : 'disponibili'}`, value: c.name, group: 'Già nel tuo archivio', slot: c}; });
+      // catalogo Cardmarket: una riga per ogni stampa
+      const prints = q.length >= 2 ? cmSearchPrintings(g, q, 40) : [];
+      const cmn = prints.filter(x => !seen.has(x.p.id) && !seen.has(keyOf({game: g, expansion: x.expansion, name: x.name, rarity: x.rarity})))
+        .map(x => ({label: x.name, subHtml: `<b class="acx">${esc(x.expansion)}</b> <span class="acr ${x.rarity ? '' : 'q'}" title="${esc(x.rarAll || '')}">${esc(x.rarity || (x.rarAll ? (x.rarAll.split(' / ').length > 2 ? x.rarAll.split(' / ').length + ' rarità possibili' : x.rarAll + ' ?') : 'rarità non indicata'))}</span>` + [x.code, x.variant && !x.variant.includes(x.rarity || '~') ? x.variant : '', mktPrice(x.p) != null ? 'mercato ' + eur(mktPrice(x.p)) : ''].filter(Boolean).map(t => ' · ' + esc(t)).join(''),
+          value: x.name, print: x, group: 'Catalogo Cardmarket · scrivi anche il set o il codice per restringere'}));
       cb([...local, ...cmn]);
-      if (q.length >= 3 && (!CM.idx[CM_GAMES[g]] || g === 'Yu-Gi-Oh!')){ const rem = await remoteNames(g, q); if (!CM.idx[CM_GAMES[g]]) cb([...local, ...cmn, ...rem.filter(r => !seen.has(norm(r.value))).slice(0, 12)]); else st.remote = rem; }
+      if (q.length >= 3 && !CM.idx[CM_GAMES[g]]){ const rem = await remoteNames(g, q); cb([...local, ...rem.slice(0, 12)]); }
     }, it => {
       st.cm_id = null;
+      if (it.slot || it.print){   // stampa precisa: compila nome, espansione e rarità
+        const x = it.slot || it.print;
+        E('name').value = it.slot ? x.name : x.name; E('expansion').value = x.expansion || ''; E('rarity').value = (it.slot ? x.rarity : x.rarity) || '';
+        st.cm_id = it.slot ? (x.cm_id || null) : x.p.id; st.sets = null;
+        if (it.slot && x.image_url) st.image = x.image_url;
+        if (it.print && curGame() === 'Yu-Gi-Oh!') remoteNames('Yu-Gi-Oh!', x.name).then(r => { const y = r.find(z => fold(z.value) === fold(x.name)); if (y){ st.sets = y.sets; if (!st.image) st.image = y.image || null;
+          if (!E('rarity').value){ const s1 = (y.sets || []).filter(s => fold(s.expansion) === fold(x.expansion)); if (s1.length && new Set(s1.map(s => s.rarity)).size === 1) E('rarity').value = s1[0].rarity; } } }).catch(() => {});
+        hint();
+        setTimeout(() => (E('rarity').value ? E('qty') : E('rarity')).focus(), 50);
+        return;
+      }
       E('name').value = it.value;
       st.sets = it.sets || null;
       if (!it.sets && !it.localName && curGame() === 'Yu-Gi-Oh!') remoteNames('Yu-Gi-Oh!', it.value).then(r => { const x = r.find(y => fold(y.value) === fold(it.value)); if (x && fold(E('name').value) === fold(it.value)){ st.sets = x.sets; if (!st.image) st.image = x.image || null; } }).catch(() => {});
