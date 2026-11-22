@@ -850,11 +850,11 @@ const estCopy = (card, copy) => mktUnit(card, copy) ?? estUnit(card.id);
 function mktTrend(p){ if (!p || p.trend == null || !p.avg30) return 0; return (p.trend - p.avg30) / p.avg30; }
 const mktArrow = () => '';
 const mktCell = card => { const p = cmFor(card), v = mktPrice(p); return v == null ? '<span class="muted">—</span>' : `${eur(v)} ${mktArrow(p)}`; };
-/** link alla carta su Cardmarket: elenco delle carte singole filtrato su espansione e nome (apre la carta giusta) */
+/** link alla carta su Cardmarket (ricerca per nome) */
 const cmUrl = (card, p) => {
   const slug = CM_SLUG[CM_GAMES[card.game]] || 'YuGiOh';
   const q = encodeURIComponent(clean(cmQuotes(p ? p.name : card.name).replace(/\s*\[[^\]]*\]/g, '').replace(/\s*\(V\.\s*\d+[^)]*\)/gi, '')));
-  return p ? `https://www.cardmarket.com/it/${slug}/Products/Singles?idExpansion=${p.exp}&searchString=${q}` : `https://www.cardmarket.com/it/${slug}/Products/Search?searchString=${q}`;
+  return `https://www.cardmarket.com/it/${slug}/Products/Search?searchString=${q}`;
 };
 function cmPanel(card){
   const gid = CM_GAMES[card.game];
