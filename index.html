@@ -671,11 +671,26 @@ async function remoteNames(game, q){
 
 /* ===================== IMMAGINI ===================== */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const IMG_GAMES = ['Pokémon', 'Yu-Gi-Oh!'];
+const IMG_GAMES = ['Pokémon', 'Yu-Gi-Oh!', 'One Piece'];
+/** immagine della stampa esatta, dal prodotto Cardmarket collegato alla carta */
+function exactImageUrl(card){
+  const p = card && cmFor(card); if (!p) return null;
+  if (card.game === 'Pokémon' && p.img) return `https://images.pokemontcg.io/${p.img}.png`;
+  if (card.game === 'Yu-Gi-Oh!' && p.img) return `https://images.ygoprodeck.com/images/cards_small/${p.img}.jpg`;
+  if (card.game === 'One Piece'){
+    const n = cmQuotes(p.name), m = n.match(/\(([A-Z]{1,4}\d{0,3}-\d{3})\)/), v = +((n.match(/\(V\.\s*(\d+)/i) || [])[1] || 1);
+    if (m) return `https://en.onepiece-cardgame.com/images/cardlist/card/${m[1]}${v > 1 ? '_p' + (v - 1) : ''}.png`;
+  }
+  return null;
+}
+const AUTO_HOSTS = /ygoprodeck\.com|pokemontcg\.io|onepiece-cardgame\.com/;
+const imgIsManual = u => !!u && (/#m$/.test(u) || !(AUTO_HOSTS.test(u) || /[?&]src=/.test(u)));
+const imgHasExact = (u, ex) => !!u && !!ex && (u === ex || u.includes('src=' + encodeURIComponent(ex)));
 const baseName = n => clean(String(n).replace(/\s*[\[(].*?[\])]\s*/g, ' '));
 /** Cerca immagini candidate per una carta nei database pubblici */
 async function findImages(card){
   const name = baseName(card.name), out = [];
+  const ex = exactImageUrl(card); if (ex) out.push({url: ex, label: 'Stampa esatta (Cardmarket)'});
   if (card.game === 'Pokémon'){
     const qn = `name:"${name.replace(/"/g, '')}"`;
     const sel = '&pageSize=12&select=name,images,rarity,set,number';
@@ -702,17 +717,19 @@ async function resizeBlob(blob, max = 480){
 }
 const blobToDataUrl = b => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); });
 /** Salva un'immagine (Blob o URL) nello Storage di Supabase e restituisce l'URL pubblico */
-async function storeImage(cardId, src){
-  if (typeof src === 'string'){
-    if (S.mode !== 'supabase' || !/ygoprodeck\.com/.test(src)) return src; // Pokémon: le immagini ufficiali si possono usare direttamente
-    try { const r = await fetch(src); if (!r.ok) throw 0; src = await r.blob(); } catch { return src; }
+async function storeImage(cardId, src, {manual = false} = {}){
+  const orig = typeof src === 'string' ? src : null;
+  if (orig){
+    if (S.mode !== 'supabase' || !/ygoprodeck\.com/.test(orig)) return manual ? orig + '#m' : orig; // Pokémon e One Piece: immagini ufficiali usate direttamente
+    try { const r = await fetch(orig); if (!r.ok) throw 0; src = await r.blob(); } catch { return manual ? orig + '#m' : orig; }
   }
   const small = await resizeBlob(src, S.mode === 'supabase' ? 480 : 260);
-  if (S.mode !== 'supabase') return blobToDataUrl(small);
-  const path = `${S.user.id}/${cardId}.jpg`;
+  if (S.mode !== 'supabase') return (await blobToDataUrl(small)) + (manual || !orig ? '#m' : '');
+  const path = `${S.user.id}/${cardId}${orig ? '' : '-foto'}.jpg`;
   const {error} = await sb.storage.from('card-images').upload(path, small, {contentType: 'image/jpeg', upsert: true});
   if (error) throw new Error(/bucket/i.test(error.message) ? 'manca lo spazio immagini su Supabase: riesegui schema.sql' : error.message);
-  return sb.storage.from('card-images').getPublicUrl(path).data.publicUrl + '?v=' + Date.now();
+  const pub = sb.storage.from('card-images').getPublicUrl(path).data.publicUrl + '?v=' + Date.now();
+  return orig && !manual ? pub + '&src=' + encodeURIComponent(orig) : pub + '#m';
 }
 const thumbHtml = c => `<span class="thumb" data-thumb="${c.id}">${c.image_url ? `<img src="${esc(c.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer"><img class="big" src="${esc(c.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<i class="${gameCls(c.game)}">${esc(gameAbbr(c.game))}</i>`}</span>`;
 const bigImgHtml = c => c.image_url ? `<img src="${esc(c.image_url)}" alt="${esc(c.name)}" referrerpolicy="no-referrer">` : `<div class="ph"><div class="gicon ${gameCls(c.game)}" style="margin:0 auto">${esc(gameAbbr(c.game))}</div><b>${esc(c.name)}</b><small>${esc(c.rarity)}</small></div>`;
@@ -728,10 +745,18 @@ async function setCardImage(id, url, {quiet = false} = {}){
 }
 // coda automatica: cerca le immagini mancanti senza intasare i database pubblici
 const imgQ = [], imgTried = new Set(); let imgRunning = false;
-const needsImg = c => c && IMG_GAMES.includes(c.game) && (!c.image_url || (S.mode === 'supabase' && /ygoprodeck\.com/.test(c.image_url)));
+/** serve un'immagine nuova? sì se manca, o se quella automatica non è della stampa esatta (le foto e le scelte a mano non si toccano) */
+function needsImg(c){
+  if (!c || !IMG_GAMES.includes(c.game)) return false;
+  const u = c.image_url, ex = exactImageUrl(c);
+  if (!u) return true;
+  if (imgIsManual(u)) return false;
+  if (ex && !imgHasExact(u, ex)) return true;
+  return S.mode === 'supabase' && /^https:\/\/images\.ygoprodeck\.com/.test(u);
+}
 function queueImages(ids){
   if (localStorage.getItem('cardarchive.autoimg') === 'off') return;
-  ids.forEach(id => { if (!imgTried.has(id) && needsImg(S.cards.get(id))){ imgTried.add(id); imgQ.push(id); } });
+  ids.forEach(id => { const c = S.cards.get(id); const k = id + '|' + (exactImageUrl(c) || ''); if (!imgTried.has(k) && needsImg(c)){ imgTried.add(k); imgQ.push(id); } });
   runImgQ();
 }
 async function runImgQ(){
@@ -740,7 +765,8 @@ async function runImgQ(){
     const id = imgQ.shift(), c = S.cards.get(id);
     try {
       if (needsImg(c)){
-        const url = c.image_url || (await findImages(c))[0]?.url;
+        const ex = exactImageUrl(c);
+        const url = ex || (c.image_url && /^https:\/\/images\.ygoprodeck\.com/.test(c.image_url) ? c.image_url : null) || (!c.image_url ? (await findImages(c))[0]?.url : null);
         if (url){ const fin = await storeImage(id, url); if (fin !== c.image_url) await setCardImage(id, fin, {quiet: true}); }
       }
     } catch (e){ console.warn('immagine', c?.name, e); }
@@ -762,7 +788,7 @@ function imageForm(id){
       </div>
     </div>
     <div id="imgres"></div>`, {wide: true, onMount: m => {
-    const done = async url => { $('#imgres', m).innerHTML = '<div class="muted" style="margin-top:10px">Salvataggio…</div>'; try { const fin = await storeImage(id, url); closeModal(); await setCardImage(id, fin); } catch (e){ toast('Errore immagine: ' + e.message, 'err'); $('#imgres', m).innerHTML = ''; } };
+    const done = async (url, auto = false) => { $('#imgres', m).innerHTML = '<div class="muted" style="margin-top:10px">Salvataggio…</div>'; try { const fin = await storeImage(id, url, {manual: !auto}); closeModal(); await setCardImage(id, fin); } catch (e){ toast('Errore immagine: ' + e.message, 'err'); $('#imgres', m).innerHTML = ''; } };
     $('#imgfile', m).onchange = e => e.target.files[0] && done(e.target.files[0]);
     $('#imgurlok', m).onclick = () => { const u = clean($('#imgurl', m).value); if (/^https?:\/\//.test(u)) done(u); else toast('Link non valido', 'err'); };
     $('#imgdel', m) && ($('#imgdel', m).onclick = async () => { closeModal(); await setCardImage(id, null); imgTried.add(id); });
@@ -771,7 +797,7 @@ function imageForm(id){
       const list = await findImages(c);
       $('#imgres', m).innerHTML = list.length ? `<div class="small muted" style="margin-top:12px">Clicca l'immagine giusta:</div><div class="imgprev">${list.slice(0, 18).map((x, i) => `<img src="${esc(x.url)}" title="${esc(x.label)}" data-i="${i}" referrerpolicy="no-referrer">`).join('')}</div>`
         : '<div class="note" style="margin-top:10px">Nessuna immagine trovata. Prova a controllare il nome (in inglese) o carica una foto.</div>';
-      $$('.imgprev img', m).forEach(im => im.onclick = () => done(list[+im.dataset.i].url));
+      $$('.imgprev img', m).forEach(im => im.onclick = () => done(list[+im.dataset.i].url, list[+im.dataset.i].url === exactImageUrl(c)));
     });
   }});
 }
@@ -798,6 +824,7 @@ function cmIndexGame(gid, d){
     p.rarAll = (at.rar != null && r[at.rar]) || cmRar(p.name) || '';          // può essere "Rare / Starfoil Rare" se Cardmarket non distingue
     p.rar = p.rarAll.includes(' / ') ? '' : p.rarAll;
     p.code = (at.code != null && r[at.code]) || '';
+    p.img = (at.img != null && r[at.img]) || '';
     CM.byId.set(p.id, p);
     const k = cmBase(p.name); (ix.byName.get(k) || ix.byName.set(k, []).get(k)).push(p);
   }
@@ -2381,8 +2408,8 @@ function pageData(app){
           <div class="filters"><button class="btn" data-act="exportXlsx">⬇ Excel</button><button class="btn" data-act="exportJson">⬇ Backup JSON</button></div></div>
         <div class="panel"><h2>Prezzi Cardmarket</h2><p class="muted small" style="margin-top:-4px">Il listino viene aggiornato ogni notte da un'automazione sul tuo GitHub.</p>
           <div class="small" id="cmst">${cmStatusHtml()}</div><div class="filters" style="margin-top:8px"><button class="btn sm" id="cmre">↻ Ricarica listino</button></div></div>
-        <div class="panel"><h2>Immagini delle carte</h2><p class="muted small" style="margin-top:-4px">Yu-Gi-Oh! e Pokémon: l'immagine viene cercata da sola quando apri una carta. Qui puoi cercarle tutte in una volta. Per One Piece e altri giochi carica una foto dalla pagina della carta.</p>
-          <div class="filters"><button class="btn" id="imgall">🔎 Trova immagini mancanti</button><label class="small"><input type="checkbox" id="imgauto" ${localStorage.getItem('cardarchive.autoimg') === 'off' ? '' : 'checked'}> ricerca automatica</label></div><div id="imgprog" class="small muted" style="margin-top:8px"></div></div>
+        <div class="panel"><h2>Immagini delle carte</h2><p class="muted small" style="margin-top:-4px">Ogni carta prende l'immagine della sua stampa esatta (espansione e versione collegate a Cardmarket). Le foto caricate da te e le immagini scelte a mano non vengono mai sostituite. Qui puoi cercarle tutte in una volta. Per One Piece e altri giochi carica una foto dalla pagina della carta.</p>
+          <div class="filters"><button class="btn" id="imgall">🔎 Aggiorna immagini (stampa esatta)</button><label class="small"><input type="checkbox" id="imgauto" ${localStorage.getItem('cardarchive.autoimg') === 'off' ? '' : 'checked'}> ricerca automatica</label></div><div id="imgprog" class="small muted" style="margin-top:8px"></div></div>
         <div class="panel"><h2>Backup automatico</h2><p class="muted small" style="margin-top:-4px">Ogni lunedì un'automazione salva una copia cifrata di tutto l'archivio sul tuo GitHub (ultimi 6 mesi).</p>
           <a class="btn sm" href="https://github.com/${CM_REPO}/tree/backup" target="_blank" rel="noopener">Vedi i backup su GitHub ↗</a></div>
         <div class="panel"><h2>Ripristina backup</h2><label class="btn"><input type="file" id="jsf" accept=".json,.enc,.gz" hidden>Scegli file (.json o backup cifrato)</label>
@@ -2410,7 +2437,7 @@ function pageData(app){
   $('#imgall').onclick = () => {
     localStorage.setItem('cardarchive.autoimg', 'on'); $('#imgauto').checked = true;
     imgTried.clear(); const ids = [...S.cards.values()].filter(needsImg).map(c => c.id); queueImages(ids);
-    const tot = ids.length; if (!tot){ $('#imgprog').textContent = 'Tutte le carte di Yu-Gi-Oh! e Pokémon hanno già un\'immagine.'; return; }
+    const tot = ids.length; if (!tot){ $('#imgprog').textContent = 'Tutte le immagini sono già quelle della stampa esatta.'; return; }
     const t = setInterval(() => { const el = $('#imgprog'); if (!el){ clearInterval(t); return; }
       const left = imgQ.length; el.textContent = left ? `Ricerca in corso: ${tot - left} di ${tot}…` : `Fatto: ${[...S.cards.values()].filter(c => IMG_GAMES.includes(c.game) && c.image_url).length} carte con immagine. Quelle non trovate puoi sistemarle a mano.`;
       if (!left && !imgRunning) clearInterval(t); }, 700);
