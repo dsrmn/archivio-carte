@@ -154,8 +154,10 @@ def add_rarities(gid, rows, exp, ygo, pkm):
                     if hit: r[9] = hit[0][1]
                 elif len(rars) == 1:
                     r[8] = rars[0]; r[9] = prints[0][1]
-                elif len(rars) > 1 and len(rs) == 1:
+                elif len(rars) > 1:
                     r[8] = " / ".join(rars)
+                    codes = {p[1] for p in prints}
+                    if len(codes) == 1: r[9] = prints[0][1]
         elif gid == 6 and en:
             prints = pkm.get((en, bn), [])
             if prints and len(prints) == len(rs):
@@ -193,9 +195,6 @@ def main():
             rows.append([p["idProduct"], p["name"], p.get("idExpansion"), r2(g.get("trend")), r2(g.get("avg30")),
                          r2(g.get("low")), r2(g.get("avg7")), r2(g.get("trend-foil"))])
         n_rar = add_rarities(gid, rows, exp, ygo, pkm)
-        if gid == 3:  # diagnostica: confronto nomi dei set
-            print("  diag jinzo ygopro:", sorted(ygo.get("jinzo", {}).keys())[:40])
-            print("  diag jinzo cardmarket:", sorted({fold(exp.get(str(r[2]), "")) for r in rows if base_name(r[1]) == "jinzo"})[:40])
         doc = {"game": gname, "idGame": gid, "createdAt": prices.get("createdAt") or singles.get("createdAt"),
                "exp": exp, "cols": ["id", "name", "exp", "trend", "avg30", "low", "avg7", "trendFoil", "rar", "code"], "p": rows}
         path = os.path.join(OUT, f"cm_{gid}.json")

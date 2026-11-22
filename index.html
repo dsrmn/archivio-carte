@@ -789,7 +789,9 @@ function cmIndexGame(gid, d){
   const at = Object.fromEntries(cols.map((c, i) => [c, i]));
   for (const r of d.p){
     const p = {id: r[at.id], name: r[at.name], exp: r[at.exp], trend: r[at.trend], avg30: r[at.avg30], low: r[at.low], avg7: r[at.avg7], trendFoil: r[at.trendFoil], gid};
-    p.rar = cmRar(p.name);
+    p.rarAll = (at.rar != null && r[at.rar]) || cmRar(p.name) || '';          // può essere "Rare / Starfoil Rare" se Cardmarket non distingue
+    p.rar = p.rarAll.includes(' / ') ? '' : p.rarAll;
+    p.code = (at.code != null && r[at.code]) || '';
     CM.byId.set(p.id, p);
     const k = cmBase(p.name); (ix.byName.get(k) || ix.byName.set(k, []).get(k)).push(p);
   }
@@ -919,7 +921,7 @@ const cmLabel = (p, gid) => clean(cmDisplayName(p.name, gid).replace(/\s*\((?:[A
 /** tutte le espansioni (stampe) Cardmarket di una carta, dal nome */
 function cmPrintings(game, name){
   const gid = CM_GAMES[game], ix = CM.idx[gid]; if (!ix || !clean(name)) return [];
-  const list = (ix.byName.get(cmBase(name)) || []).map(p => ({p, named: !!ix.exp[p.exp], expansion: ix.exp[p.exp] || `Altra espansione (n. ${p.exp})`, rarity: p.rar,
+  const list = (ix.byName.get(cmBase(name)) || []).map(p => ({p, named: !!ix.exp[p.exp], expansion: ix.exp[p.exp] || `Altra espansione (n. ${p.exp})`, rarity: p.rar, rarAll: p.rarAll, code: p.code,
     variant: (cmQuotes(p.name).match(/\(([^)]*)\)\s*$/) || [])[1] || ''}))
     .sort((a, b) => (b.named - a.named) || a.expansion.localeCompare(b.expansion) || (mktPrice(a.p) ?? 0) - (mktPrice(b.p) ?? 0));
   const seen = {};
@@ -1578,9 +1580,10 @@ function addCardForm(pre = {}){
       const prints = cmPrintings(g, E('name').value);
       if (prints.length){
         const ygo = new Map(((st.sets && st.sets[0] && st.sets[0].code !== 'nel tuo archivio') ? st.sets : []).map(s => [fold(s.expansion), s.rarity]));
-        prints.filter(x => !f2 || fold(`${x.expansion} ${x.rarity} ${x.variant}`).includes(f2)).slice(0, 120).forEach(x => {
-          const rar = x.rarity || ygo.get(fold(x.expansion)) || '';
-          out.push({label: x.expansion, sub: [rar, x.variant && !x.variant.includes(rar || '~') ? x.variant : '', mktPrice(x.p) != null ? 'mercato ' + eur(mktPrice(x.p)) : ''].filter(Boolean).join(' · '),
+        prints.filter(x => !f2 || fold(`${x.expansion} ${x.rarAll} ${x.code} ${x.variant}`).includes(f2)).slice(0, 120).forEach(x => {
+          const rar = x.rarity || (ygo.get(fold(x.expansion)) && !String(ygo.get(fold(x.expansion))).includes(' / ') ? ygo.get(fold(x.expansion)) : '') || '';
+          const rarTxt = rar ? `◆ ${rar}` : x.rarAll ? `◆ ${x.rarAll} (scegli in base al prezzo)` : 'rarità non indicata';
+          out.push({label: x.expansion, sub: [rarTxt, x.code, x.variant && !x.variant.includes(rar || '~') ? x.variant : '', mktPrice(x.p) != null ? 'mercato ' + eur(mktPrice(x.p)) : ''].filter(Boolean).join(' · '),
             set: {expansion: x.expansion, rarity: rar, cm_id: x.p.id}, group: `Espansioni di questa carta su Cardmarket (${prints.length})`});
         });
       }
