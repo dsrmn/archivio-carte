@@ -229,6 +229,12 @@ async def main():
                 await page.set_viewport_size({"width": 390, "height": 800}); await go(h)
                 check(f"vista da telefono {h}", "Errore" not in await page.inner_text("#app"))
             await page.set_viewport_size({"width": 1280, "height": 900})
+            cid = await ev("[...S.cards.values()].find(c => c.cm_id || cmFor(c))?.id || [...S.cards.keys()][0]")
+            seen = []
+            for h in ["#/", "#/collezione", "#/giacenze", "#/lotti", f"#/c/{cid}"]:
+                await go(h); t = await page.inner_text("#app")
+                if "Mercato" in t or "Trend" in t or "Media 30" in t or "prezzo di mercato" in t.lower(): seen.append(h)
+            check("nessun prezzo di mercato Cardmarket mostrato", not seen, seen)
         await step("Tutte le pagine", pagine)
 
         async def guadagni():

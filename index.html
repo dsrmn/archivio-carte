@@ -832,6 +832,8 @@ const cmBase = s => fold(cmQuotes(s).replace(/\s*\[[^\]]*\]/g, '').replace(/\s*\
 const cmRar = s => (String(s).match(/\(V\.\s*\d+\s*-\s*([^)]+)\)/i) || [])[1] || '';
 const cmDisplayName = (s, gid) => clean(cmQuotes(s).replace(/\s*\[[^\]]*\]/g, '').replace(gid === 3 ? /\s*\(V\.\s*\d+[^)]*\)/gi : /$^/, ''));
 const mktPrice = p => p ? (p.trend ?? p.avg30 ?? p.avg7 ?? p.low ?? null) : null;
+/** prezzi di mercato Cardmarket nascosti su richiesta: metti true per rimostrarli */
+const SHOW_MKT = false;
 
 function cmIndexGame(gid, d){
   const cols = d.cols, ix = {gid, game: d.game, createdAt: d.createdAt, exp: d.exp || {}, byName: new Map(), expByName: new Map(), n: d.p.length};
@@ -924,6 +926,7 @@ function cmFor(card){
 /** correzione % del prezzo di mercato per la lingua della copia (impostazioni) */
 const langFactor = () => 1;
 function mktUnit(card, copy){
+  if (!SHOW_MKT) return null;
   const p = cmFor(card); if (!p) return null;
   const base = copy && /foil|reverse/i.test(copy.notes || '') && p.trendFoil ? p.trendFoil : mktPrice(p);
   return base == null ? null : copy ? base * langFactor(copy.language) : base;
@@ -942,18 +945,18 @@ function cmPanel(card){
   const gid = CM_GAMES[card.game];
   if (!gid) return '';
   const ix = CM.idx[gid];
-  if (!ix) return `<div class="panel cmp"><h3>Prezzo di mercato</h3><div class="muted small" style="margin-top:6px">${CM.err[gid] ? 'Listino Cardmarket non disponibile: ' + esc(CM.err[gid]) : 'Caricamento del listino Cardmarket…'}</div></div>`;
+  if (!ix) return `<div class="panel cmp"><h3>${SHOW_MKT ? 'Prezzo di mercato' : 'Cardmarket'}</h3><div class="muted small" style="margin-top:6px">${CM.err[gid] ? 'Listino Cardmarket non disponibile: ' + esc(CM.err[gid]) : 'Caricamento del listino Cardmarket…'}</div></div>`;
   const p = cmFor(card);
   if (!p){
     const r = cmMatch(card);
-    return `<div class="panel cmp"><h3>Prezzo di mercato</h3><div class="small muted" style="margin:6px 0 10px">${card.cm_id == -1 ? 'Hai indicato che questa carta non ha una corrispondenza su Cardmarket.' : r.status === 'ambiguous' ? `Ci sono ${r.cands.length} versioni possibili su Cardmarket: scegli quella giusta.` : 'Non ho trovato la carta nel catalogo Cardmarket: cercala per nome.'}</div>
+    return `<div class="panel cmp"><h3>${SHOW_MKT ? 'Prezzo di mercato' : 'Cardmarket'}</h3><div class="small muted" style="margin:6px 0 10px">${card.cm_id == -1 ? 'Hai indicato che questa carta non ha una corrispondenza su Cardmarket.' : r.status === 'ambiguous' ? `Ci sono ${r.cands.length} versioni possibili su Cardmarket: scegli quella giusta.` : 'Non ho trovato la carta nel catalogo Cardmarket: cercala per nome.'}</div>
       <button class="btn" data-act="cmPick" data-id="${card.id}">🔗 Collega a Cardmarket</button></div>`;
   }
   const m = CM.match.get(card.id) === p && !card.cm_id;
-  return `<div class="panel cmp"><div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap"><div class="grow"><h3>Prezzo di mercato <span class="small muted" style="font-weight:400">Cardmarket · ${fdate((ix.createdAt || '').slice(0, 10))}</span></h3>
+  return `<div class="panel cmp"><div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap"><div class="grow"><h3>${SHOW_MKT ? 'Prezzo di mercato' : 'Cardmarket'} <span class="small muted" style="font-weight:400">Cardmarket · ${fdate((ix.createdAt || '').slice(0, 10))}</span></h3>
       <div class="small muted" style="margin-top:2px">${esc(cmQuotes(p.name))} · ${esc(ix.exp[p.exp] || 'espansione ' + p.exp)}${m ? ' · <i>abbinata in automatico</i>' : ''}</div></div>
       <a class="btn sm" href="${cmUrl(card, p)}" target="_blank" rel="noopener">Apri su Cardmarket ↗</a><button class="btn sm" data-act="cmPick" data-id="${card.id}">Cambia</button></div>
-    <div class="cmgrid"><div><span>Trend</span><b>${eur(p.trend)}</b>${mktArrow(p)}</div><div><span>Media 30 gg</span><b>${eur(p.avg30)}</b></div><div><span>Media 7 gg</span><b>${eur(p.avg7)}</b></div><div><span>Da</span><b>${eur(p.low)}</b></div>${p.trendFoil ? `<div><span>Trend foil</span><b>${eur(p.trendFoil)}</b></div>` : ''}</div></div>`;
+    ${SHOW_MKT ? `<div class="cmgrid"><div><span>Trend</span><b>${eur(p.trend)}</b>${mktArrow(p)}</div><div><span>Media 30 gg</span><b>${eur(p.avg30)}</b></div><div><span>Media 7 gg</span><b>${eur(p.avg7)}</b></div><div><span>Da</span><b>${eur(p.low)}</b></div>${p.trendFoil ? `<div><span>Trend foil</span><b>${eur(p.trendFoil)}</b></div>` : ''}</div>` : ''}</div>`;
 }
 /** nomi di carte del catalogo Cardmarket che iniziano/contengono il testo */
 function cmNameSuggest(game, q, limit = 10){
@@ -999,7 +1002,7 @@ function cmPickForm(cardId){
   const card = S.cards.get(cardId), gid = CM_GAMES[card.game], ix = CM.idx[gid];
   if (!ix){ toast('Listino Cardmarket non ancora caricato', 'err'); return; }
   const render2 = (list, m) => {
-    $('#cml', m).innerHTML = list.length ? list.slice(0, 60).map(p => `<div class="cmi" data-id="${p.id}"><div class="grow"><b>${esc(cmQuotes(p.name))}</b><div class="small muted">${esc(ix.exp[p.exp] || 'espansione ' + p.exp)}</div></div><div class="right"><b>${eur(mktPrice(p))}</b>${p.low != null ? `<div class="small muted">da ${eur(p.low)}</div>` : ''}</div></div>`).join('')
+    $('#cml', m).innerHTML = list.length ? list.slice(0, 60).map(p => `<div class="cmi" data-id="${p.id}"><div class="grow"><b>${esc(cmQuotes(p.name))}</b><div class="small muted">${esc(ix.exp[p.exp] || 'espansione ' + p.exp)}</div></div>${SHOW_MKT ? `<div class="right"><b>${eur(mktPrice(p))}</b>${p.low != null ? `<div class="small muted">da ${eur(p.low)}</div>` : ''}</div>` : ''}</div>`).join('')
       : '<div class="empty">Nessun risultato.</div>';
     $$('.cmi', m).forEach(el => el.onclick = async () => { closeModal(); await commit(`Collegata a Cardmarket: ${card.name}`, tx => tx.update('cards', cardId, {cm_id: +el.dataset.id})); });
   };
@@ -1035,7 +1038,7 @@ function pageLink(app){
   const tot = [...S.cards.values()].filter(c => CM_GAMES[c.game]).length, ok = [...S.cards.values()].filter(c => cmFor(c)).length;
   app.innerHTML = `
     <div class="crumbs"><a href="#/">Home</a> › <a href="#/dati">Importa / Esporta</a> › <b>Collega a Cardmarket</b></div>
-    <div class="pagehead"><div class="grow"><h1>Collega le carte a Cardmarket</h1><div class="muted">${ok} carte su ${tot} hanno già il prezzo di mercato. Qui trovi quelle da sistemare: basta sceglierle una volta.</div></div></div>
+    <div class="pagehead"><div class="grow"><h1>Collega le carte a Cardmarket</h1><div class="muted">${ok} carte su ${tot} sono già collegate. Qui trovi quelle da sistemare: basta sceglierle una volta.</div></div></div>
     ${Object.keys(CM.idx).length ? '' : `<div class="note">${cmStatusHtml()}</div>`}
     <div class="panel flush"><div class="panel-h filters"><div class="seg" id="lkf"><button data-v="amb" class="${LINKF === 'amb' ? 'on' : ''}">Più versioni possibili (${amb.length})</button><button data-v="none" class="${LINKF === 'none' ? 'on' : ''}">Non trovate (${none.length})</button></div></div>
     ${list.length ? `<div class="tw"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th class="hide-m">Espansione</th><th>Rarità</th><th class="right">Disp.</th><th>${LINKF === 'amb' ? 'Versioni' : ''}</th><th></th></tr></thead><tbody>
@@ -1121,9 +1124,9 @@ async function cmImportFlow(aoa, fname){
     if (keep.sh && $('#cmship')) $('#cmship').value = keep.sh;
     const taken = new Map();
     const st = rows.map(x => ({x, s: kind === 'sell' && x.p ? cmFindStock(x, taken) : null}));
-    $('#cmt').innerHTML = `<thead><tr><th>Carta</th><th>Espansione</th><th>Rarità</th><th>Q.tà</th><th></th><th class="right">Prezzo</th><th class="right">Mercato</th>${kind === 'sell' ? '<th>In magazzino</th>' : ''}</tr></thead><tbody>
+    $('#cmt').innerHTML = `<thead><tr><th>Carta</th><th>Espansione</th><th>Rarità</th><th>Q.tà</th><th></th><th class="right">Prezzo</th>${SHOW_MKT ? '<th class="right">Mercato</th>' : ''}${kind === 'sell' ? '<th>In magazzino</th>' : ''}</tr></thead><tbody>
       ${st.map(({x, s}) => `<tr><td>${x.p ? esc(x.name) : `<span class="neg">codice ${x.id} non trovato</span>`}</td><td class="small muted">${esc(x.expansion || '')}</td><td class="small">${esc(x.rarity || '')}</td><td>${x.qty}</td>
-        <td>${condB(x.condition)} ${x.language ? `<span class="b lang">${esc(x.language)}</span>` : ''}</td><td class="right">${eur(x.unit)}</td><td class="right">${x.p ? eur(mktPrice(x.p)) : ''}</td>
+        <td>${condB(x.condition)} ${x.language ? `<span class="b lang">${esc(x.language)}</span>` : ''}</td><td class="right">${eur(x.unit)}</td>${SHOW_MKT ? `<td class="right">${x.p ? eur(mktPrice(x.p)) : ''}</td>` : ''}
         ${kind === 'sell' ? `<td>${!s ? '' : s.missing ? `<span class="neg">${s.missing === x.qty ? 'non trovata' : 'mancano ' + s.missing}</span>` : '<span class="b st-d">ok</span>'}</td>` : ''}</tr>`).join('')}</tbody>`;
     const miss = kind === 'sell' ? sum(st, ({x, s}) => s ? s.missing : x.qty) : 0;
     if (kind === 'buy'){
@@ -1423,10 +1426,10 @@ function pageGame(app, game){
 function cardRowsTable(cards, {showGame = false, showExp = true} = {}){
   if (!cards.length) return `<div class="empty">Nessuna carta trovata.</div>`;
   queueImages(cards.slice(0, 150).map(x => x.c.id));
-  return `<div class="tw"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th>${showExp ? '<th class="hide-m">Espansione</th>' : ''}<th>Rarità</th>${showGame ? '<th class="hide-m">Gioco</th>' : ''}<th class="hide-m">Condizioni</th><th class="right">Disp.</th><th class="right">Vend.</th><th class="right hide-m">Acq. medio</th><th class="right hide-m">Vend. medio</th><th class="right">Mercato</th></tr></thead><tbody>
+  return `<div class="tw"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th>${showExp ? '<th class="hide-m">Espansione</th>' : ''}<th>Rarità</th>${showGame ? '<th class="hide-m">Gioco</th>' : ''}<th class="hide-m">Condizioni</th><th class="right">Disp.</th><th class="right">Vend.</th><th class="right hide-m">Acq. medio</th><th class="right hide-m">Vend. medio</th>${SHOW_MKT ? '<th class="right">Mercato</th>' : ''}</tr></thead><tbody>
   ${cards.map(({c, st}) => `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${esc(c.name)}</a></td>${showExp ? `<td class="hide-m muted">${esc(c.expansion || '—')}</td>` : ''}<td>${c.rarity ? `<span class="b rar">${esc(c.rarity)}</span>` : ''}</td>
     ${showGame ? `<td class="hide-m">${esc(c.game)}</td>` : ''}<td class="hide-m">${st.conds.map(condB).join(' ')}</td><td class="right"><b>${st.avail}</b></td><td class="right">${st.sold}</td>
-    <td class="right hide-m">${eur(st.avgBuy)}</td><td class="right hide-m">${eur(st.avgSell)}</td><td class="right nowrap">${mktCell(c)}</td></tr>`).join('')}
+    <td class="right hide-m">${eur(st.avgBuy)}</td><td class="right hide-m">${eur(st.avgSell)}</td>${SHOW_MKT ? `<td class="right nowrap">${mktCell(c)}</td>` : ''}</tr>`).join('')}
   </tbody></table></div>`;
 }
 function pageExpansion(app, game, exp){
@@ -1523,7 +1526,7 @@ function drawColl(){
     .map(x => { const av = copiesOf(x.c.id).filter(y => y.status !== 'venduto'); const as = av.filter(y => y.ask_price != null); x.ask = as.length ? Math.min(...as.map(y => y.ask_price)) : null; x.askN = sum(as, y => y.qty); x.noAskN = sum(av, y => y.qty) - x.askN; return x; })
     .filter(x => !F.ask || (F.ask === 'si' ? x.askN > 0 : x.noAskN > 0));
   const val = {name: x => x.c.name.toLowerCase(), exp: x => x.c.expansion.toLowerCase(), rar: x => x.c.rarity.toLowerCase(), game: x => x.c.game,
-    avail: x => x.st.avail, sold: x => x.st.sold, buy: x => x.st.avgBuy ?? -1, sell: x => x.st.avgSell ?? -1, mkt: x => mktPrice(cmFor(x.c)) ?? -1, ask: x => x.ask ?? -1}[F.sort];
+    avail: x => x.st.avail, sold: x => x.st.sold, buy: x => x.st.avgBuy ?? -1, sell: x => x.st.avgSell ?? -1, mkt: x => (SHOW_MKT ? mktPrice(cmFor(x.c)) : null) ?? -1, ask: x => x.ask ?? -1}[F.sort];
   rows.sort((a, b) => { const A = val(a), B = val(b); return (A < B ? -1 : A > B ? 1 : a.c.name.localeCompare(b.c.name)) * F.dir; });
   const pages = Math.max(1, Math.ceil(rows.length / PAGE)); F.p = Math.min(F.p, pages - 1);
   const slice = rows.slice(F.p * PAGE, F.p * PAGE + PAGE);
@@ -1531,10 +1534,10 @@ function drawColl(){
   const th = (k, l, cls = '') => `<th class="sortable ${cls}" data-sort="${k}">${l}${F.sort === k ? (F.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
   $('#ctab').innerHTML = !slice.length ? `<div class="empty">Nessuna carta trovata.</div>` : `<div class="tw"><table class="t"><thead><tr><th class="ck"><input type="checkbox" id="ckall" title="Seleziona tutta la pagina" ${slice.length && slice.every(x => SEL.has(x.c.id)) ? 'checked' : ''}></th><th class="tc"></th>
     ${th('name', 'Carta')}${th('exp', 'Espansione', 'hide-m')}${th('rar', 'Rarità')}${F.game ? '' : th('game', 'Gioco', 'hide-m')}<th class="hide-m">Condizioni</th>
-    ${th('avail', 'Disp.', 'right')}${th('sold', 'Vend.', 'right')}${th('buy', 'Acq. medio', 'right hide-m')}${th('sell', 'Vend. medio', 'right hide-m')}${th('mkt', 'Mercato', 'right hide-m')}${th('ask', 'In vendita a', 'right')}</tr></thead><tbody>
+    ${th('avail', 'Disp.', 'right')}${th('sold', 'Vend.', 'right')}${th('buy', 'Acq. medio', 'right hide-m')}${th('sell', 'Vend. medio', 'right hide-m')}${SHOW_MKT ? th('mkt', 'Mercato', 'right hide-m') : ''}${th('ask', 'In vendita a', 'right')}</tr></thead><tbody>
     ${slice.map(({c, st, ask, askN}) => `<tr class="${SEL.has(c.id) ? 'sel' : ''}"><td class="ck"><input type="checkbox" data-ck="${c.id}" ${SEL.has(c.id) ? 'checked' : ''}></td><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${esc(c.name)}</a></td><td class="hide-m muted">${esc(c.expansion || '—')}</td><td>${c.rarity ? `<span class="b rar">${esc(c.rarity)}</span>` : ''}</td>
       ${F.game ? '' : `<td class="hide-m">${esc(c.game)}</td>`}<td class="hide-m">${st.conds.map(condB).join(' ')}</td><td class="right"><b>${st.avail}</b></td><td class="right">${st.sold}</td>
-      <td class="right hide-m">${eur(st.avgBuy)}</td><td class="right hide-m">${eur(st.avgSell)}</td><td class="right nowrap hide-m">${mktCell(c)}</td>
+      <td class="right hide-m">${eur(st.avgBuy)}</td><td class="right hide-m">${eur(st.avgSell)}</td>${SHOW_MKT ? `<td class="right nowrap hide-m">${mktCell(c)}</td>` : ''}
       <td class="right nowrap">${ask != null ? `${askN > 1 ? '<span class="small muted">da</span> ' : ''}<b>${eur(ask)}</b>` : '<span class="muted">—</span>'}</td></tr>`).join('')}
     </tbody></table></div>
     ${pages > 1 ? `<div class="pager"><button class="btn sm" data-pg="${F.p - 1}" ${F.p ? '' : 'disabled'}>‹</button><span class="small muted">Pagina ${F.p + 1} di ${pages}</span><button class="btn sm" data-pg="${F.p + 1}" ${F.p < pages - 1 ? '' : 'disabled'}>›</button></div>` : ''}`;
@@ -1709,7 +1712,7 @@ function addCardForm(pre = {}){
       // catalogo Cardmarket: una riga per ogni stampa
       const prints = q.length >= 2 ? cmSearchPrintings(g, q, 40) : [];
       const cmn = prints.filter(x => !seen.has(x.p.id) && !seen.has(keyOf({game: g, expansion: x.expansion, name: x.name, rarity: x.rarity})))
-        .map(x => ({label: x.name, subHtml: `<b class="acx">${esc(x.expansion)}</b> <span class="acr ${x.rarity ? '' : 'q'}" title="${esc(x.rarAll || '')}">${esc(x.rarity || (x.rarAll ? (x.rarAll.split(' / ').length > 2 ? x.rarAll.split(' / ').length + ' rarità possibili' : x.rarAll + ' ?') : 'rarità non indicata'))}</span>` + [x.code, x.variant && !x.variant.includes(x.rarity || '~') ? x.variant : '', mktPrice(x.p) != null ? 'mercato ' + eur(mktPrice(x.p)) : ''].filter(Boolean).map(t => ' · ' + esc(t)).join(''),
+        .map(x => ({label: x.name, subHtml: `<b class="acx">${esc(x.expansion)}</b> <span class="acr ${x.rarity ? '' : 'q'}" title="${esc(x.rarAll || '')}">${esc(x.rarity || (x.rarAll ? (x.rarAll.split(' / ').length > 2 ? x.rarAll.split(' / ').length + ' rarità possibili' : x.rarAll + ' ?') : 'rarità non indicata'))}</span>` + [x.code, x.variant && !x.variant.includes(x.rarity || '~') ? x.variant : '', SHOW_MKT && mktPrice(x.p) != null ? 'mercato ' + eur(mktPrice(x.p)) : ''].filter(Boolean).map(t => ' · ' + esc(t)).join(''),
           value: x.name, print: x, group: 'Catalogo Cardmarket · scrivi anche il set o il codice per restringere'}));
       cb([...local, ...cmn]);
       if (q.length >= 3 && !CM.idx[CM_GAMES[g]]){ const rem = await remoteNames(g, q); cb([...local, ...rem.slice(0, 12)]); }
@@ -1746,8 +1749,8 @@ function addCardForm(pre = {}){
         const ygo = new Map(((st.sets && st.sets[0] && st.sets[0].code !== 'nel tuo archivio') ? st.sets : []).map(s => [fold(s.expansion), s.rarity]));
         prints.filter(x => !f2 || fold(`${x.expansion} ${x.rarAll} ${x.code} ${x.variant}`).includes(f2)).slice(0, 120).forEach(x => {
           const rar = x.rarity || (ygo.get(fold(x.expansion)) && !String(ygo.get(fold(x.expansion))).includes(' / ') ? ygo.get(fold(x.expansion)) : '') || '';
-          const rarTxt = rar ? `◆ ${rar}` : x.rarAll ? `◆ ${x.rarAll} (scegli in base al prezzo)` : 'rarità non indicata';
-          out.push({label: x.expansion, sub: [rarTxt, x.code, x.variant && !x.variant.includes(rar || '~') ? x.variant : '', mktPrice(x.p) != null ? 'mercato ' + eur(mktPrice(x.p)) : ''].filter(Boolean).join(' · '),
+          const rarTxt = rar ? `◆ ${rar}` : x.rarAll ? `◆ ${x.rarAll} (controlla su Cardmarket)` : 'rarità non indicata';
+          out.push({label: x.expansion, sub: [rarTxt, x.code, x.variant && !x.variant.includes(rar || '~') ? x.variant : '', SHOW_MKT && mktPrice(x.p) != null ? 'mercato ' + eur(mktPrice(x.p)) : ''].filter(Boolean).join(' · '),
             set: {expansion: x.expansion, rarity: rar, cm_id: x.p.id}, group: `Espansioni di questa carta su Cardmarket (${prints.length})`});
         });
       }
@@ -2085,7 +2088,7 @@ function pageLots(app){
         <td class="right hide-m">${s.left ? (s.est ? '≈ ' + eur(s.est) : '—') : ''}</td>
         <td class="acts"><button class="btn sm" data-act="editLot" data-id="${l.id}">✎</button></td></tr>`).join('')}
     </tbody></table></div>` : `<div class="empty">Nessun lotto. Creane uno qui o scegli “Da un lotto” quando aggiungi una carta.</div>`}</div>
-    <div class="small muted">La stima delle carte rimaste usa il prezzo di mercato Cardmarket (trend) o, se la carta non è collegata, il tuo prezzo medio di vendita.</div>`;
+    <div class="small muted">${SHOW_MKT ? 'La stima delle carte rimaste usa il prezzo di mercato Cardmarket (trend) o, se la carta non è collegata, il tuo prezzo medio di vendita.' : 'La stima delle carte rimaste usa il tuo prezzo medio di vendita di quella carta.'}</div>`;
 }
 function pageLot(app, id){
   const l = S.lots.get(id);
@@ -2098,7 +2101,7 @@ function pageLot(app, id){
   const msg = s.profit >= 0
     ? `<b class="pos">Lotto ripagato.</b> Hai già guadagnato ${eur(s.profit)}: tutto quello che vendi ora è guadagno${s.left ? ` (${s.left} ${s.left === 1 ? 'carta' : 'carte'} ancora da vendere${s.est ? `, stimate ≈ ${eur(s.est)}` : ''})` : ''}.`
     : `Per rientrare ti mancano <b>${eur(need)}</b>${s.left ? `: in media <b>${eur(need / s.left)}</b> ${s.left === 1 ? 'per l\'ultima carta rimasta' : 'per ognuna delle ' + s.left + ' carte rimaste'}` : ' e non ci sono più carte da vendere'}.` +
-      (s.est ? ` Vendendo le rimaste a prezzo di mercato incasseresti circa ${eur(s.est)}: ${s.est >= need ? '<b class="pos">rientreresti</b>' : `resteresti sotto di ${eur(need - s.est)}`}${s.unknown ? ` (${s.unknown} ${s.unknown === 1 ? 'carta' : 'carte'} senza stima)` : ''}.` : '');
+      (s.est ? ` Vendendo le rimaste ${SHOW_MKT ? 'a prezzo di mercato' : 'ai tuoi prezzi medi'} incasseresti circa ${eur(s.est)}: ${s.est >= need ? '<b class="pos">rientreresti</b>' : `resteresti sotto di ${eur(need - s.est)}`}${s.unknown ? ` (${s.unknown} ${s.unknown === 1 ? 'carta' : 'carte'} senza stima)` : ''}.` : '');
   app.innerHTML = `
     <div class="crumbs"><a href="#/">Home</a> › <a href="#/lotti">Lotti</a> › <b>${esc(l.description)}</b></div>
     <div class="pagehead"><div class="grow"><h1>${esc(l.description)}</h1><div class="muted">Acquistato il ${fdate(l.buy_date)}</div></div>
@@ -2107,7 +2110,7 @@ function pageLot(app, id){
     <div class="stats"><div class="stat"><div class="l">Pagato</div><div class="v">${eur(l.total_price)}</div><div class="s">${s.copies} carte</div></div>
       <div class="stat"><div class="l">Ricavo netto</div><div class="v">${eur(s.earned)}</div><div class="s">${s.sold} vendute · lordo ${eur(s.gross)}</div></div>
       <div class="stat"><div class="l">${s.profit >= 0 ? 'Guadagno' : 'Mancano per rientrare'}</div><div class="v">${s.profit >= 0 ? signEur(s.profit) : `<span class="neg">${eur(need)}</span>`}</div><div class="s">${s.left} ${s.left === 1 ? 'carta rimasta' : 'carte rimaste'}</div></div>
-      <div class="stat"><div class="l">Stima rimaste</div><div class="v">${s.est ? '≈ ' + eur(s.est) : '—'}</div><div class="s">${s.unknown ? s.unknown + ' senza stima' : 'a prezzo di mercato'}</div></div></div>
+      <div class="stat"><div class="l">Stima rimaste</div><div class="v">${s.est ? '≈ ' + eur(s.est) : '—'}</div><div class="s">${s.unknown ? s.unknown + ' senza stima' : (SHOW_MKT ? 'a prezzo di mercato' : 'dai tuoi prezzi di vendita')}</div></div></div>
     <div class="panel">${progBar(s.pct, s.profit >= 0, true)}<div class="small muted" style="display:flex;justify-content:space-between;margin:4px 0 10px"><span>${Math.floor(Math.min(s.pct, 999))}% ripagato</span><span>${eur(s.earned)} su ${eur(l.total_price)}</span></div><div>${msg}</div></div>
     <div class="panel flush"><div class="panel-h"><h2>Da vendere</h2><span class="muted">${s.left}</span></div>
       ${av.length ? `<div class="tw"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th class="hide-m">Espansione</th><th>Rarità</th><th>Q.tà</th><th></th><th class="right">Stima</th><th></th></tr></thead><tbody>
@@ -2226,7 +2229,7 @@ function pageStale(app){
     <div class="stats" style="padding:14px 16px 0;margin:0">
       <div class="stat"><div class="l">Copie ferme</div><div class="v">${sum(list, x => x.c.qty)}</div><div class="s">${new Set(list.map(x => x.card.id)).size} carte diverse</div></div>
       <div class="stat"><div class="l">Capitale fermo</div><div class="v">${eur(capital)}</div><div class="s">quanto le hai pagate (singole)</div></div>
-      <div class="stat"><div class="l">Valore stimato</div><div class="v">${est ? '≈ ' + eur(est) : '—'}</div><div class="s">a prezzo di mercato Cardmarket</div></div>
+      <div class="stat"><div class="l">Valore stimato</div><div class="v">${est ? '≈ ' + eur(est) : '—'}</div><div class="s">${SHOW_MKT ? 'a prezzo di mercato Cardmarket' : 'dai tuoi prezzi di vendita'}</div></div>
     </div>
     ${list.length ? `<div class="tw" style="margin-top:14px"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th class="hide-m">Espansione</th><th></th><th>Q.tà</th><th class="hide-m">Acquistata</th><th>Ferma da</th><th class="right">Costo</th><th class="right">Stima</th><th class="right">In vendita a</th><th></th></tr></thead><tbody>
       ${list.slice(0, 300).map(({c, card, days, est, cost}) => `<tr><td class="tc">${thumbHtml(card)}</td><td><a class="cname" href="#/c/${card.id}">${esc(card.name)}</a>${card.rarity ? `<div class="small muted">${esc(card.rarity)}</div>` : ''}</td><td class="hide-m muted">${esc(card.expansion || '—')}</td>
@@ -2436,7 +2439,7 @@ function exportXLSX(){
       for (const x of copiesOf(c.id)) rows.push({'Nome Carta': c.name, 'Edizione': x.edition || '', 'Set/Espansione': c.expansion, 'Rarità': c.rarity, 'Condizione': x.condition || '', 'Lingua': x.language || '',
         'Quantità': x.qty, 'ID Lotto': x.lot_id ? lotRef.get(x.lot_id) || '' : '', 'Data Acquisto': fdate(x.buy_date).replace('—', ''), 'Prezzo Acquisto Unitario': x.buy_price ?? '',
         'Prezzo Acquisto Totale': x.buy_price != null ? round2(x.buy_price * x.qty) : '', 'Stato': x.status === 'venduto' ? 'Venduto' : 'Disponibile', 'Data Vendita': fdate(x.sell_date).replace('—', ''),
-        'In vendita a': x.status !== 'venduto' && x.ask_price != null ? x.ask_price : '', 'Prezzo Vendita Totale': x.sell_price ?? '', 'Prezzo Mercato': mktUnit(c, x) ?? '', 'Ricavo Netto': x.status === 'venduto' && x.sell_price != null ? round2(netSell(x)) : '', 'Piattaforma': x.platform || '', 'Note': x.notes || ''});
+        'In vendita a': x.status !== 'venduto' && x.ask_price != null ? x.ask_price : '', 'Prezzo Vendita Totale': x.sell_price ?? '', ...(SHOW_MKT ? {'Prezzo Mercato': mktUnit(c, x) ?? ''} : {}), 'Ricavo Netto': x.status === 'venduto' && x.sell_price != null ? round2(netSell(x)) : '', 'Piattaforma': x.platform || '', 'Note': x.notes || ''});
     if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), g.replace(/[\\/?*[\]:]/g, '').slice(0, 31));
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lots.map(l => ({'ID Lotto': lotRef.get(l.id), 'Descrizione': l.description, 'Data': fdate(l.buy_date).replace('—', ''), 'Prezzo Totale': l.total_price}))
