@@ -132,3 +132,35 @@ alter table public.cards add column if not exists cm_id bigint;   -- idProduct C
 -- =============================================================
 alter table public.copies add column if not exists ask_price numeric(12,2);   -- in vendita a (per copia)
 alter table public.copies add column if not exists ask_date  date;            -- da quando è in vendita a quel prezzo
+
+-- =============================================================
+-- Vetrina: link di sola lettura con le carte disponibili
+-- Chi ha il link (con il codice segreto) vede solo nome, espansione,
+-- rarità, immagine, quantità, condizioni e lingue. Niente prezzi.
+-- =============================================================
+create table if not exists public.share_links (
+  token       text primary key,
+  user_id     uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  created_at  timestamptz not null default now()
+);
+alter table public.share_links enable row level security;
+drop policy if exists share_links_own on public.share_links;
+create policy share_links_own on public.share_links for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+create or replace function public.guest_stock(p_token text)
+returns table (card_id uuid, game text, expansion text, name text, rarity text, image_url text,
+               qty bigint, conditions text, languages text)
+language sql stable security definer set search_path = public as $$
+  select c.id, c.game, c.expansion, c.name, c.rarity, c.image_url,
+         sum(cp.qty)::bigint,
+         string_agg(distinct cp.condition, ','),
+         string_agg(distinct cp.language, ',')
+  from share_links s
+  join cards  c  on c.user_id = s.user_id
+  join copies cp on cp.card_id = c.id and cp.status = 'disponibile'
+  where s.token = p_token and length(p_token) >= 24
+  group by c.id
+$$;
+revoke all on function public.guest_stock(text) from public;
+grant execute on function public.guest_stock(text) to anon, authenticated;

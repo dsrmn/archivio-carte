@@ -190,6 +190,9 @@ th.ck,td.ck{width:30px;padding-right:0}.ck input{width:16px;height:16px;cursor:p
 .selbar{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--card2);border-top:1px solid var(--blue);box-shadow:0 -6px 20px rgba(0,0,0,.4)}
 .selin{max-width:1240px;margin:0 auto;padding:10px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 #app:has(#selbar){padding-bottom:80px}
+/* vetrina */
+.show-m{display:none}
+@media (max-width:760px){.show-m{display:block}}
 /* Cardmarket */
 a.askl{color:inherit;text-decoration:none;display:inline-block;padding:2px 4px;border-radius:4px}a.askl:hover{background:var(--hover)}
 .ctbox{margin-top:12px;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--card2)}
@@ -1183,6 +1186,98 @@ async function cmImportFlow(aoa, fname){
   };
 }
 
+/* ===================== VETRINA (link di sola lettura) ===================== */
+const GUEST_RE = /^#\/vetrina\/([A-Za-z0-9_-]{24,})(?:\?(.*))?$/;
+const G = {token: null, rows: null, err: null, q: '', game: '', loading: false};
+const isGuestLink = () => GUEST_RE.test(location.hash);
+async function guestBoot(){
+  const m = location.hash.match(GUEST_RE), qs = new URLSearchParams(m[2] || ''), cfg = getCfg();
+  G.token = m[1];
+  const url = qs.get('u') ? fixUrl(qs.get('u')) : cfg?.url, key = qs.get('k') || cfg?.key;
+  if (!url || !key || !window.supabase){ G.err = 'Link incompleto: chiedi un nuovo link al proprietario dell\'archivio.'; renderGuest(); return; }
+  if (!sb) sb = window.supabase.createClient(url, key, {auth: {persistSession: false, autoRefreshToken: false, storageKey: 'cardarchive.guest'}});
+  await guestLoad();
+}
+async function guestLoad(){
+  G.loading = true; renderGuest();
+  try {
+    const {data, error} = await sb.rpc('guest_stock', {p_token: G.token});
+    if (error) throw error;
+    G.rows = data || []; G.err = null;
+  } catch (e){
+    G.err = /guest_stock|function|schema cache/i.test(e.message || '') ? 'La vetrina non è ancora attiva su questo archivio.' : /fetch/i.test(e.message || '') ? 'Impossibile raggiungere l\'archivio: riprova tra poco.' : e.message;
+  }
+  G.loading = false; renderGuest();
+}
+function renderGuest(){
+  const rows = G.rows || [];
+  const games = [...new Set(rows.map(r => r.game))].sort();
+  $('#root').innerHTML = `
+  <header class="top"><div class="top-in">
+    <span class="logo"><i>D</i>DSR&nbsp;<span>Archive</span></span>
+    <div class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="gq" placeholder="Cerca una carta: nome, espansione o rarità…" value="${esc(G.q)}"></div>
+    <div class="top-actions"><span class="b lotb" style="padding:4px 8px">Vetrina · sola lettura</span><button class="tbtn" id="grl" title="Aggiorna">↻</button></div>
+  </div></header>
+  <main id="app">
+    <div class="pagehead"><div class="grow"><h1>Carte disponibili</h1><div class="muted" id="gcount"></div></div>
+      ${games.length > 1 ? `<select class="inp" id="gg" style="width:auto">${opt('', G.game, 'Tutti i giochi')}${games.map(g => opt(g, G.game)).join('')}</select>` : ''}</div>
+    <div id="glist">${G.err ? `<div class="panel empty">${esc(G.err)}</div>` : G.loading && !G.rows ? '<div class="panel empty">Caricamento…</div>' : ''}</div>
+  </main>`;
+  const draw = () => {
+    if (G.err || !G.rows) return;
+    const words = fold(G.q).split(' ').filter(Boolean);
+    const list = rows.filter(r => (!G.game || r.game === G.game) && words.every(w => fold(`${r.name} ${r.expansion} ${r.rarity}`).includes(w)))
+      .sort((a, b) => a.name.localeCompare(b.name, 'it') || (a.expansion || '').localeCompare(b.expansion || '', 'it'));
+    $('#gcount').textContent = `${list.length} ${list.length === 1 ? 'carta' : 'carte'} · ${sum(list, r => Number(r.qty))} copie${words.length ? ' trovate' : ''}`;
+    $('#glist').innerHTML = !list.length ? `<div class="panel empty">${words.length ? 'Nessuna carta trovata: non è disponibile nell\'archivio.' : 'Nessuna carta disponibile.'}</div>`
+      : `<div class="panel flush"><div class="tw"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th class="hide-m">Espansione</th><th>Rarità</th><th class="right">Disponibili</th><th class="hide-m">Condizione / lingua</th></tr></thead><tbody>
+        ${list.slice(0, 500).map(r => `<tr><td class="tc">${thumbHtml({id: r.card_id, game: r.game, image_url: (r.image_url || '').replace(/#m$/, '')})}</td>
+          <td><b>${esc(r.name)}</b><div class="small muted show-m">${esc(r.expansion || '')}</div></td><td class="hide-m muted">${esc(r.expansion || '—')}</td>
+          <td>${r.rarity ? `<span class="b rar">${esc(r.rarity)}</span>` : ''}</td><td class="right"><b>${r.qty}</b></td>
+          <td class="hide-m">${(r.conditions || '').split(',').filter(Boolean).map(condB).join(' ')} ${(r.languages || '').split(',').filter(Boolean).map(l => `<span class="b lang">${esc(l)}</span>`).join(' ')}</td></tr>`).join('')}
+        </tbody></table></div></div>${list.length > 500 ? '<div class="small muted">Mostrate le prime 500: usa la ricerca per trovare le altre.</div>' : ''}`;
+  };
+  let t; $('#gq').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { G.q = e.target.value; draw(); }, 150); });
+  $('#gg') && ($('#gg').onchange = e => { G.game = e.target.value; draw(); });
+  $('#grl').onclick = () => guestLoad();
+  draw();
+}
+/* --- gestione del link dal proprietario --- */
+const newToken = () => { const b = crypto.getRandomValues(new Uint8Array(24)); return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+function guestUrl(token){
+  const cfg = getCfg(), base = location.origin + location.pathname;
+  return `${base}#/vetrina/${token}` + (cfg && !cfg.fixed ? `?u=${encodeURIComponent(cfg.url)}&k=${encodeURIComponent(cfg.key)}` : '');
+}
+async function shareModal(){
+  if (S.mode !== 'supabase'){ openModal('Link vetrina', `<p style="margin-top:0">Il link di sola lettura funziona solo con l'archivio sincronizzato su Supabase: in modalità locale i dati restano in questo browser.</p><div class="mfoot"><button class="btn" data-c>Chiudi</button></div>`, {onMount: m => { $('[data-c]', m).onclick = closeModal; }}); return; }
+  let tok = null, err = null;
+  try { const {data, error} = await sb.from('share_links').select('token,created_at').order('created_at', {ascending: false}).limit(1); if (error) throw error; tok = data?.[0]?.token || null; }
+  catch (e){ err = /share_links|schema cache|does not exist/i.test(e.message || '') ? 'schema' : e.message; }
+  if (err === 'schema'){ upgradeModal(); return; }
+  const body = tok ? `<p style="margin-top:0">Chi apre questo link vede <b>solo le carte disponibili</b> (nome, espansione, rarità, quantità, condizione, lingua e immagine), senza prezzi e senza poter modificare nulla. Non serve accedere.</p>
+      <div style="display:flex;gap:6px"><input class="inp" id="shu" readonly value="${esc(guestUrl(tok))}"><button class="btn pri" id="shc">Copia</button></div>
+      <div class="small muted" style="margin-top:8px">Aprilo sul telefono e aggiungilo ai preferiti (o alla schermata Home) per controllare al volo se hai una carta.</div>
+      <div class="mfoot"><button class="btn dan" id="shoff" style="margin-right:auto">Disattiva link</button><button class="btn" id="shnew">Crea un link nuovo</button><a class="btn" href="${esc(guestUrl(tok))}" target="_blank" rel="noopener">Apri ↗</a><button class="btn" data-c>Chiudi</button></div>`
+    : `<p style="margin-top:0">Crea un link per vedere le tue <b>carte disponibili</b> senza accedere, per esempio dal telefono o da condividere con chi vuoi. Mostra solo nome, espansione, rarità, quantità, condizione, lingua e immagine: niente prezzi, niente modifiche.</p>
+      <div class="mfoot"><button class="btn" data-c>Annulla</button><button class="btn pri" id="shnew">Crea link</button></div>`;
+  openModal('Link vetrina (sola lettura)', body, {onMount: m => {
+    $('[data-c]', m).onclick = closeModal;
+    $('#shc', m) && ($('#shc', m).onclick = async () => { try { await navigator.clipboard.writeText($('#shu', m).value); toast('Link copiato'); } catch { $('#shu', m).select(); document.execCommand('copy'); toast('Link copiato'); } });
+    $('#shnew', m).onclick = async () => {
+      const t = newToken();
+      const del = await sb.from('share_links').delete().neq('token', '');
+      const {error} = await sb.from('share_links').insert({token: t});
+      if (error || del.error){ toast('Impossibile creare il link: ' + (error || del.error).message, 'err'); return; }
+      toast(tok ? 'Nuovo link creato: quello vecchio non funziona più' : 'Link creato'); shareModal();
+    };
+    $('#shoff', m) && ($('#shoff', m).onclick = async () => {
+      const {error} = await sb.from('share_links').delete().neq('token', '');
+      if (error){ toast(error.message, 'err'); return; }
+      closeModal(); toast('Link disattivato: non funziona più');
+    });
+  }});
+}
+
 /* ===================== layout ===================== */
 function route(){
   const h = location.hash.slice(1) || '/';
@@ -1218,6 +1313,7 @@ function shell(){
   <main id="app"></main>`;
 }
 function render(){
+  if (G.token){ const m = location.hash.match(GUEST_RE); if (m && m[1] === G.token) renderGuest(); else location.reload(); return; }
   if (!S.user){ renderAuth(); return; }
   index();
   $('#root').innerHTML = shell();
@@ -2633,11 +2729,12 @@ function settingsModal(){
     ${S.mode === 'supabase' ? `<dt>Progetto</dt><dd class="small">${esc(cfg?.url || '')}</dd>` : ''}
     <dt>Contenuto</dt><dd>${S.cards.size} carte · ${S.copies.size} righe · ${S.lots.size} lotti · ${S.orders.size} vendite</dd>
     <dt>Commissioni</dt><dd>${Object.entries(SET.fees).filter(([, v]) => v.pct || v.fixed).map(([p, v]) => `${esc(p)} ${String(v.pct).replace('.', ',')}%`).join(' · ') || 'nessuna'} · spedizione ${eur(SET.shipCost)}</dd></dl>
-    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="fees">💶 Commissioni e spedizioni…</button><button class="btn" id="langs">🌐 Lingue…</button></div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="fees">💶 Commissioni e spedizioni…</button><button class="btn" id="langs">🌐 Lingue…</button><button class="btn" id="share">🔗 Link vetrina…</button></div>
     <div class="mfoot">${cfg?.fixed ? '' : '<button class="btn dan" id="chg">Cambia collegamento</button>'}<button class="btn" id="rel">Ricarica dati</button><button class="btn pri" id="out">${S.mode === 'local' ? 'Esci' : 'Esci dall\'account'}</button></div>`,
   {onMount: m => {
     $('#fees', m).onclick = () => feesModal();
     $('#langs', m).onclick = () => langModal();
+    $('#share', m).onclick = () => shareModal();
     $('#rel', m).onclick = async () => { closeModal(); await loadAll(); await loadSettings(); render(); toast('Dati ricaricati'); };
     $('#out', m).onclick = async () => { closeModal(); if (S.mode === 'supabase') await sb.auth.signOut(); S.user = null; undoStack.length = 0; SEL.clear(); if (S.mode === 'local') setCfg(null); render(); };
     $('#chg', m) && ($('#chg', m).onclick = async () => { closeModal(); if (S.mode === 'supabase') await sb.auth.signOut(); setCfg(null); S.user = null; sb = null; undoStack.length = 0; render(); });
@@ -2703,6 +2800,7 @@ async function afterLogin(user){
   render();
 }
 async function boot(){
+  if (isGuestLink()){ await guestBoot(); return; }
   const cfg = getCfg();
   if (!cfg){ renderAuth(); return; }
   S.mode = cfg.mode;

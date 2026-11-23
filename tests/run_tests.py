@@ -264,6 +264,41 @@ async def main():
             check("ripristinare due volte non crea doppioni", await ev("({cards: S.cards.size, copies: S.copies.size, lots: S.lots.size, orders: S.orders.size})") == counts)
         await step("Backup e ripristino", backup)
 
+        async def vetrina():
+            gp = await ctx.new_page(); gerr = []
+            gp.on("pageerror", lambda e: gerr.append(str(e)))
+            rows = [{"card_id": "a1", "game": "Yu-Gi-Oh!", "expansion": "Maximum Crisis", "name": "Ash Blossom & Joyous Spring", "rarity": "Secret Rare", "image_url": None, "qty": 3, "conditions": "NM,EX", "languages": "EN-EU"},
+                    {"card_id": "b2", "game": "Pokémon", "expansion": "151", "name": "Charizard ex", "rarity": "Double Rare", "image_url": None, "qty": 1, "conditions": "NM", "languages": "IT"}]
+            calls = []
+            async def groute(r):
+                u = r.request.url
+                if "test.supabase.co" in u:
+                    calls.append((r.request.method, u, r.request.post_data))
+                    h = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"}
+                    if r.request.method == "OPTIONS":
+                        return await r.fulfill(status=200, headers=h, body="")
+                    ok = "rpc/guest_stock" in u and "A" * 30 in (r.request.post_data or "")
+                    return await r.fulfill(status=200, headers={**h, "Content-Type": "application/json"}, body=json.dumps(rows if ok else []))
+                return await route(r)
+            await gp.route("**/*", groute)
+            await gp.goto(URL + "#/vetrina/" + "A" * 30 + "?u=https%3A%2F%2Ftest.supabase.co&k=chiave-anon"); await gp.wait_for_timeout(1500)
+            txt = await gp.inner_text("#app")
+            check("la vetrina si apre senza accesso e mostra le carte disponibili", "Ash Blossom" in txt and "Charizard ex" in txt, txt[:200])
+            check("la vetrina non mostra prezzi", "€" not in txt, txt[:300])
+            check("la vetrina non ha pulsanti per modificare", not await gp.query_selector("[data-act]"))
+            await gp.fill("#gq", "charizard"); await gp.wait_for_timeout(400)
+            t2 = await gp.inner_text("#glist")
+            check("ricerca nella vetrina", "Charizard" in t2 and "Ash Blossom" not in t2, t2[:200])
+            await gp.fill("#gq", "carta che non ho"); await gp.wait_for_timeout(400)
+            check("messaggio chiaro se la carta non c'è", "non è disponibile" in await gp.inner_text("#glist"))
+            only_rpc = all("rpc/guest_stock" in c[1] for c in calls if c[0] != "OPTIONS")
+            check("la vetrina usa solo la funzione di sola lettura", calls and only_rpc, calls[:3])
+            await gp.goto(URL + "#/vetrina/" + "B" * 30 + "?u=https%3A%2F%2Ftest.supabase.co&k=chiave-anon"); await gp.wait_for_timeout(1200)
+            check("un codice sbagliato non mostra nessuna carta", "Nessuna carta disponibile" in await gp.inner_text("#glist"))
+            check("nessun errore JavaScript nella vetrina", not gerr, gerr[:3])
+            await gp.close()
+        await step("Vetrina di sola lettura (link guest)", vetrina)
+
         print("\n▶ Errori JavaScript durante i test")
         check("nessun errore JavaScript nella pagina", not errors, errors[:5])
         await browser.close()
