@@ -434,11 +434,21 @@ async function saveSettings(){
   const {error} = await sb.from('settings').upsert({user_id: S.user.id, data: SET, updated_at: new Date().toISOString()});
   if (error) toast('Salvate solo su questo dispositivo: riesegui schema.sql su Supabase', 'err');
 }
-const feeFor = (platform, items) => { const f = SET.fees[platform]; return f && items ? round2(items * (f.pct || 0) / 100 + (f.fixed || 0)) : 0; };
+const feeCfg = platform => { const k = Object.keys(SET.fees).find(x => fold(x) === fold(platform)); return k ? SET.fees[k] : null; };
+const feeFor = (platform, items) => { const f = feeCfg(platform); return f && items ? round2(items * (f.pct || 0) / 100 + (f.fixed || 0)) : 0; };
 
 /* ===== transazioni con annullamento ===== */
 const undoStack = [];
-async function commit(label, fn){
+let txChain = Promise.resolve();          // le modifiche vengono eseguite una alla volta, in ordine
+const txInflight = new Set();             // stessa modifica già in corso (doppio clic) → ignorata
+function commit(label, fn){
+  if (txInflight.has(label)) return Promise.resolve(false);
+  txInflight.add(label);
+  const run = txChain.then(() => commitNow(label, fn)).finally(() => txInflight.delete(label));
+  txChain = run.catch(() => {});
+  return run;
+}
+async function commitNow(label, fn){
   const inv = [];
   const tx = {
     async insert(t, rows){
@@ -480,7 +490,8 @@ async function applyInverse(ops){
     else { await DB.upsert(o.t, o.rows); o.rows.forEach(r => S[o.t].set(r.id, normRow(o.t, r))); }
   }
 }
-async function undo(){
+function undo(){ const run = txChain.then(undoNow); txChain = run.catch(() => {}); return run; }
+async function undoNow(){
   const u = undoStack.pop(); if (!u) return;
   busy(true);
   try { await applyInverse(u.inv); toast('Annullato: ' + u.label); }
@@ -563,7 +574,7 @@ function askForm(ids){
 }
 function findCard(game, expansion, name, rarity){ return IX.byKey.get(keyOf({game, expansion, name, rarity})); }
 async function ensureCard(tx, d){
-  const ex = S.cards.size && [...S.cards.values()].find(c => keyOf(c) === keyOf(d));
+  const ex = S.cards.size && ([...S.cards.values()].find(c => keyOf(c) === keyOf(d)) || (d.cm_id ? [...S.cards.values()].find(c => c.game === d.game && Number(c.cm_id) === Number(d.cm_id)) : null));
   if (ex){ if (d.image_url && !ex.image_url) await tx.update('cards', ex.id, {image_url: d.image_url}); if (d.cm_id && !ex.cm_id && !S.noCmId) await tx.update('cards', ex.id, {cm_id: d.cm_id}); return ex.id; }
   const id = uid();
   await tx.insert('cards', {id, game: clean(d.game), expansion: clean(d.expansion), name: clean(d.name), rarity: clean(d.rarity), image_url: d.image_url || null, ...(d.cm_id ? {cm_id: d.cm_id} : {})});
@@ -683,6 +694,9 @@ function exactImageUrl(card){
   }
   return null;
 }
+const NOIMG_KEY = 'cardarchive.noimg';
+const noImg = () => { try { return new Set(JSON.parse(localStorage.getItem(NOIMG_KEY) || '[]')); } catch { return new Set(); } };
+const setNoImg = (id, on) => { const s = noImg(); on ? s.add(id) : s.delete(id); localStorage.setItem(NOIMG_KEY, JSON.stringify([...s])); };
 const AUTO_HOSTS = /ygoprodeck\.com|pokemontcg\.io|onepiece-cardgame\.com/;
 const imgIsManual = u => !!u && (/#m$/.test(u) || !(AUTO_HOSTS.test(u) || /[?&]src=/.test(u)));
 const imgHasExact = (u, ex) => !!u && !!ex && (u === ex || u.includes('src=' + encodeURIComponent(ex)));
@@ -747,7 +761,7 @@ async function setCardImage(id, url, {quiet = false} = {}){
 const imgQ = [], imgTried = new Set(); let imgRunning = false;
 /** serve un'immagine nuova? sì se manca, o se quella automatica non è della stampa esatta (le foto e le scelte a mano non si toccano) */
 function needsImg(c){
-  if (!c || !IMG_GAMES.includes(c.game)) return false;
+  if (!c || !IMG_GAMES.includes(c.game) || noImg().has(c.id)) return false;
   const u = c.image_url, ex = exactImageUrl(c);
   if (!u) return true;
   if (imgIsManual(u)) return false;
@@ -788,10 +802,10 @@ function imageForm(id){
       </div>
     </div>
     <div id="imgres"></div>`, {wide: true, onMount: m => {
-    const done = async (url, auto = false) => { $('#imgres', m).innerHTML = '<div class="muted" style="margin-top:10px">Salvataggio…</div>'; try { const fin = await storeImage(id, url, {manual: !auto}); closeModal(); await setCardImage(id, fin); } catch (e){ toast('Errore immagine: ' + e.message, 'err'); $('#imgres', m).innerHTML = ''; } };
+    const done = async (url, auto = false) => { setNoImg(id, false); $('#imgres', m).innerHTML = '<div class="muted" style="margin-top:10px">Salvataggio…</div>'; try { const fin = await storeImage(id, url, {manual: !auto}); closeModal(); await setCardImage(id, fin); } catch (e){ toast('Errore immagine: ' + e.message, 'err'); $('#imgres', m).innerHTML = ''; } };
     $('#imgfile', m).onchange = e => e.target.files[0] && done(e.target.files[0]);
     $('#imgurlok', m).onclick = () => { const u = clean($('#imgurl', m).value); if (/^https?:\/\//.test(u)) done(u); else toast('Link non valido', 'err'); };
-    $('#imgdel', m) && ($('#imgdel', m).onclick = async () => { closeModal(); await setCardImage(id, null); imgTried.add(id); });
+    $('#imgdel', m) && ($('#imgdel', m).onclick = async () => { closeModal(); setNoImg(id, true); await setCardImage(id, null); });
     $('#imgsearch', m) && ($('#imgsearch', m).onclick = async () => {
       $('#imgres', m).innerHTML = '<div class="muted" style="margin-top:10px">Ricerca…</div>';
       const list = await findImages(c);
@@ -913,7 +927,6 @@ function mktUnit(card, copy){
 }
 /** stima di una copia: prezzo di mercato corretto per lingua, altrimenti il tuo prezzo medio di vendita */
 const estCopy = (card, copy) => mktUnit(card, copy) ?? estUnit(card.id);
-function mktTrend(p){ if (!p || p.trend == null || !p.avg30) return 0; return (p.trend - p.avg30) / p.avg30; }
 const mktArrow = () => '';
 const mktCell = card => { const p = cmFor(card), v = mktPrice(p); return v == null ? '<span class="muted">—</span>' : `${eur(v)} ${mktArrow(p)}`; };
 /** link alla carta su Cardmarket (ricerca per nome) */
@@ -978,7 +991,6 @@ function cmSearchPrintings(game, q, limit = 40){
   }
   return [];
 }
-const rarLabel = x => x.rarity ? `◆ ${x.rarity}` : x.rarAll ? `◆ ${x.rarAll} (scegli in base al prezzo)` : 'rarità non indicata';
 
 function cmPickForm(cardId){
   const card = S.cards.get(cardId), gid = CM_GAMES[card.game], ix = CM.idx[gid];
@@ -1046,7 +1058,7 @@ function cmParseRows(aoa){
     const notes = [flag(r, 'isFoil') && 'Foil', flag(r, 'isReverseHolo') && 'Reverse Holo', flag(r, 'isSigned') && 'Firmata', flag(r, 'isAltered') && 'Alterata'].filter(Boolean).join(' · ') || null;
     out.push({id, p, qty, unit: round2(unit), condition: CM_COND[+r[col('condition')]] || 'NM', language: (l => l === 'EN' ? (SET.enDefault || 'EN') : l)(CM_LANG[+r[col('idLanguage')]] || null),
       edition: flag(r, 'isFirstEd') ? '1st Edition' : null, notes,
-      game: p ? CM.idx[gid].game : null, name: p ? cmDisplayName(p.name, gid) : null, expansion: p ? (CM.idx[gid].exp[p.exp] || `Espansione Cardmarket ${p.exp}`) : null, rarity: p ? cmRar(p.name) : ''});
+      game: p ? CM.idx[gid].game : null, name: p ? cmDisplayName(p.name, gid) : null, expansion: p ? (CM.idx[gid].exp[p.exp] || `Espansione Cardmarket ${p.exp}`) : null, rarity: p ? (p.rar || cmRar(p.name)) : ''});
   }
   // unisci righe identiche (Cardmarket a volte divide la stessa carta su più righe)
   const m = new Map();
@@ -1205,7 +1217,6 @@ function shell(){
   ${S.noOrders || S.noCmId || S.noAsk ? `<div class="upg"><div>⚙️ Per attivare <b>${S.noOrders ? 'vendite, commissioni e spedizioni' : S.noCmId ? 'il collegamento manuale delle carte a Cardmarket' : 'il prezzo di vendita richiesto'}</b> serve un piccolo aggiornamento del database. <a href="#" data-act="upgrade">Come si fa</a></div></div>` : ''}
   <main id="app"></main>`;
 }
-let lastShellKey = '';
 function render(){
   if (!S.user){ renderAuth(); return; }
   index();
@@ -1289,16 +1300,6 @@ function pageHome(app){
         <td class="right nowrap">${e.kind === 'v' ? eur(e.c.sell_price) : e.c.lot_id ? '<span class="b lotb">lotto</span>' : eur((e.c.buy_price || 0) * e.c.qty)}</td></tr>`).join('')}
       </tbody></table></div>` : `<div class="empty">Ancora nessuna carta. Inizia con <a href="#" data-act="addCard">Aggiungi carta</a> o <a href="#/dati">importa il tuo Excel</a>.</div>`}
     </div>`;
-}
-
-function movers(){
-  const list = [];
-  for (const c of S.cards.values()){ const p = cmFor(c); if (!p || (p.trend ?? 0) < 1) continue; const t = mktTrend(p); if (Math.abs(t) < .15) continue;
-    const q = sum(copiesOf(c.id).filter(x => x.status !== 'venduto'), x => x.qty); if (q) list.push({c, p, t, q, d: (p.trend - p.avg30) * q}); }
-  if (!list.length) return '';
-  const up = list.filter(x => x.t > 0).sort((a, b) => b.d - a.d).slice(0, 5), dn = list.filter(x => x.t < 0).sort((a, b) => a.d - b.d).slice(0, 5);
-  const li = x => `<div class="mv"><a class="cname" href="#/c/${x.c.id}">${esc(x.c.name)}</a><span class="small muted">${x.q}× · ${eur(x.p.avg30)} → ${eur(x.p.trend)}</span><span class="${x.t > 0 ? 'pos' : 'neg'}">${x.t > 0 ? '▲' : '▼'}${Math.round(Math.abs(x.t) * 100)}%</span></div>`;
-  return `<div class="row">${up.length ? `<div class="panel" style="flex:1 1 340px"><h2>📈 In salita</h2>${up.map(li).join('')}</div>` : ''}${dn.length ? `<div class="panel" style="flex:1 1 340px"><h2>📉 In discesa</h2>${dn.map(li).join('')}</div>` : ''}</div>`;
 }
 
 /* ===================== GIOCO → ESPANSIONI ===================== */
@@ -1418,6 +1419,7 @@ function pageCollection(app){
   drawColl();
 }
 function drawColl(){
+  [...SEL].forEach(id => { if (!S.cards.has(id)) SEL.delete(id); });
   const q = fold(F.q);
   let rows = [...S.cards.values()].filter(c => (!F.game || c.game === F.game) && (!q || fold(`${c.name} ${c.expansion} ${c.rarity}`).includes(q)))
     .map(c => ({c, st: cardStats(c.id)}))
@@ -1711,6 +1713,7 @@ function editCardForm(id){
     $('#ecf', m).onsubmit = async e => {
       e.preventDefault(); const E = n => e.target.elements[n];
       const d = {game: gameName(E('game').value), name: clean(E('name').value), expansion: clean(E('expansion').value), rarity: clean(E('rarity').value), image_url: clean(E('image_url').value) || null};
+      if (keyOf(d) !== keyOf(c) && c.cm_id && c.cm_id != -1 && !S.noCmId) d.cm_id = null;   // stampa cambiata: si riabbina da solo
       const target = [...S.cards.values()].find(x => x.id !== id && keyOf(x) === keyOf(d));
       let dest = id;
       const ok = await commit(target ? `Unita a ${target.name}` : `Modificata ${d.name}`, async tx => {
@@ -1832,7 +1835,7 @@ function orderForm(pre = {}){
       });
     };
     const upd = () => {
-      const items = itemsTotal(), pl = clean(E('platform').value), fs = SET.fees[pl];
+      const items = itemsTotal(), pl = clean(E('platform').value), fs = feeCfg(pl);
       if (!feeTouched) E('fee').value = fmtIn(feeFor(pl, items));
       $('#feehint', m).innerHTML = fs && (fs.pct || fs.fixed)
         ? `${String(fs.pct || 0).replace('.', ',')}% degli articoli${fs.fixed ? ' + ' + eur(fs.fixed) : ''} (${esc(pl)})${feeTouched ? ' · <a href="#" id="feere">ricalcola</a>' : ''}`
@@ -2222,7 +2225,7 @@ function buildImport(sheets, defaults){
     const headers = sh.aoa[hr].map(x => String(x ?? ''));
     const map = mapHeaders(headers, Object.keys(ALIASES));
     const body = sh.aoa.slice(hr + 1);
-    if ((map.name == null || /lott/i.test(sh.name)) && (map.desc != null || map.name != null) && (map.name == null || /lott/i.test(sh.name))){ if (map.desc == null){ map.desc = map.name; delete map.name; } lotSheets.push({sh, map, body}); } else if (false) lotSheets.push({sh, map, body}); else if (map.name != null) cardSheets.push({sh, map, body});
+    if ((map.name == null || /lott/i.test(sh.name)) && (map.desc != null || map.name != null) && (map.name == null || /lott/i.test(sh.name))){ if (map.desc == null){ map.desc = map.name; delete map.name; } lotSheets.push({sh, map, body}); } else if (map.name != null) cardSheets.push({sh, map, body});
     if (map.cents != null) info.format = 'Ordine CardTrader';
   }
   for (const {map, body} of lotSheets){
@@ -2257,7 +2260,7 @@ function buildImport(sheets, defaults){
         qty, condition: normCond(g('condition')), edition, language: clean(g('language') ?? '').toUpperCase().slice(0, 12) || null,
         buy_date: parseDate(g('buyDate')) || defaults.date || null, buy_price: lotRef ? null : (unit == null ? null : round2(unit)),
         status: sold ? 'venduto' : 'disponibile', sell_date: sold ? (parseDate(g('sellDate')) || null) : null, sell_price: sold ? num(g('sellTotal')) : null,
-        platform: clean(g('platform') ?? '') || (sold ? null : null), notes, lotRef: lotRef || null, ask_price: sold ? null : (num(g('askPrice')) == null ? null : round2(num(g('askPrice'))))};
+        platform: clean(g('platform') ?? '') || null, notes, lotRef: lotRef || null, ask_price: sold ? null : (num(g('askPrice')) == null ? null : round2(num(g('askPrice'))))};
       if (lotRef){
         const k = norm(lotRef); const a = lotAgg.get(k) || {sum: 0, date: null}; a.sum += num(g('buyTotal')) || 0; a.date = a.date || row.buy_date; lotAgg.set(k, a);
       }
@@ -2428,7 +2431,8 @@ function pageData(app){
       showPlan(plan, file.name);
     } catch (e){ console.error(e); toast('Impossibile leggere il file: ' + e.message, 'err'); }
   };
-  inp.onchange = () => handle(inp.files[0]);
+  inp.onchange = async () => { await handle(inp.files[0]); };
+  inp.onclick = () => { inp.value = ''; };
   ['dragover', 'dragenter'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('on'); }));
   ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('on'); }));
   dz.addEventListener('drop', e => handle(e.dataTransfer.files[0]));
@@ -2436,13 +2440,13 @@ function pageData(app){
   $('#imgauto').onchange = e => localStorage.setItem('cardarchive.autoimg', e.target.checked ? 'on' : 'off');
   $('#imgall').onclick = () => {
     localStorage.setItem('cardarchive.autoimg', 'on'); $('#imgauto').checked = true;
-    imgTried.clear(); const ids = [...S.cards.values()].filter(needsImg).map(c => c.id); queueImages(ids);
+    imgTried.clear(); localStorage.removeItem(NOIMG_KEY); const ids = [...S.cards.values()].filter(needsImg).map(c => c.id); queueImages(ids);
     const tot = ids.length; if (!tot){ $('#imgprog').textContent = 'Tutte le immagini sono già quelle della stampa esatta.'; return; }
     const t = setInterval(() => { const el = $('#imgprog'); if (!el){ clearInterval(t); return; }
       const left = imgQ.length; el.textContent = left ? `Ricerca in corso: ${tot - left} di ${tot}…` : `Fatto: ${[...S.cards.values()].filter(c => IMG_GAMES.includes(c.game) && c.image_url).length} carte con immagine. Quelle non trovate puoi sistemarle a mano.`;
       if (!left && !imgRunning) clearInterval(t); }, 700);
   };
-  $('#jsf').onchange = async e => { try { await importJSON(e.target.files[0]); } catch (er){ toast(er.message, 'err'); } };
+  $('#jsf').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { await importJSON(f); } catch (er){ toast(er.message, 'err'); } };
 }
 function showPlan(plan, fname){
   const {rows, lots, info} = plan;
@@ -2635,7 +2639,7 @@ function settingsModal(){
     $('#fees', m).onclick = () => feesModal();
     $('#langs', m).onclick = () => langModal();
     $('#rel', m).onclick = async () => { closeModal(); await loadAll(); await loadSettings(); render(); toast('Dati ricaricati'); };
-    $('#out', m).onclick = async () => { closeModal(); if (S.mode === 'supabase') await sb.auth.signOut(); S.user = null; undoStack.length = 0; if (S.mode === 'local') setCfg(null); render(); };
+    $('#out', m).onclick = async () => { closeModal(); if (S.mode === 'supabase') await sb.auth.signOut(); S.user = null; undoStack.length = 0; SEL.clear(); if (S.mode === 'local') setCfg(null); render(); };
     $('#chg', m) && ($('#chg', m).onclick = async () => { closeModal(); if (S.mode === 'supabase') await sb.auth.signOut(); setCfg(null); S.user = null; sb = null; undoStack.length = 0; render(); });
   }});
 }

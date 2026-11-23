@@ -5,7 +5,7 @@ in un file JSON con lo stesso formato del "Backup JSON" della web-app.
 Usa la chiave service_role (secret SUPABASE_SERVICE_KEY), che legge i dati
 anche con le regole di sicurezza attive. Il file viene poi cifrato dal workflow.
 """
-import json, os, re, sys, urllib.request, datetime
+import json, os, re, sys, urllib.request, urllib.error, datetime
 
 url = os.environ.get("SUPABASE_URL", "").strip().strip('"\'')
 key = os.environ.get("SUPABASE_SERVICE_KEY", "").strip().strip('"\'')

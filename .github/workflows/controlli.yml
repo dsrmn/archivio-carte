@@ -1,0 +1,38 @@
+name: Controlli automatici
+
+# A ogni modifica dell'app (e quando lo lanci a mano) controlla il codice
+# e prova l'archivio in un browser vero con tests/run_tests.py.
+on:
+  push:
+    paths:
+      - "index.html"
+      - "sw.js"
+      - "scripts/**"
+      - "tests/**"
+      - ".github/workflows/controlli.yml"
+  workflow_dispatch:
+
+jobs:
+  controlli:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Analisi statica del codice (ESLint)
+        run: |
+          python3 -c "import re;s=open('index.html').read();open('/tmp/app.js','w').write(re.findall(r'<script>(.*?)</script>',s,re.S)[-1])"
+          npx --yes eslint@8 --no-eslintrc -c tests/eslintrc.json --max-warnings 0 /tmp/app.js
+      - name: Controllo degli script Python
+        run: python -m py_compile scripts/*.py tests/run_tests.py
+      - name: Installa il browser per i test
+        run: |
+          pip install playwright==1.48.0
+          python -m playwright install --with-deps chromium
+      - name: Test dell'archivio
+        run: python tests/run_tests.py
