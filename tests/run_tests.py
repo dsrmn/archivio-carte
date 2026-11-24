@@ -133,6 +133,31 @@ async def main():
             check("immagine della stampa esatta", "ygoprodeck" in img, img)
         await step("Aggiunta di una carta dai suggerimenti", add_card)
 
+        async def codice_posizione():
+            await pick_name("Yu-Gi-Oh!", "CRMS-IT008")
+            vals = [await page.input_value(f"[name={n}]") for n in ("name", "rarity", "language")]
+            check("il codice del set trova la stampa e la lingua", vals == ["Blackwing - Gale the Whirlwind", "Rare", "IT"], vals)
+            await page.fill("input[name=location]", "Raccoglitore 2"); await page.fill("input[name=buy_price]", "1")
+            await page.click("#acf button.pri"); await W(1000)
+            cp = await ev("[...S.copies.values()].find(c => S.cards.get(c.card_id).name === 'Blackwing - Gale the Whirlwind' && c.language === 'IT')")
+            check("la posizione viene salvata", cp and cp.get("location") == "Raccoglitore 2", cp)
+            check("la scheda carta mostra la posizione", "Raccoglitore 2" in await page.inner_text("#app"))
+            await go("#/collezione"); await page.select_option("#floc", "Raccoglitore 2"); await W(400)
+            rows = await page.query_selector_all("#ctab tbody tr")
+            check("filtro per posizione nella Collezione", len(rows) == 1, len(rows))
+            await page.select_option("#floc", ""); await W(200)
+            await ev(f"SEL.clear(); SEL.add('{cp['card_id']}'); selLocForm()"); await W(300)
+            await page.fill("#slc input[name=v]", "Scatola A"); await page.click("#slc button.pri"); await W(800)
+            locs = await ev(f"copiesOf('{cp['card_id']}').filter(c => c.status !== 'venduto').map(c => c.location)")
+            check("posizione cambiata per le carte selezionate", locs and all(l == "Scatola A" for l in locs), locs)
+            await page.fill("#fq", "scatola a"); await W(500)
+            check("la ricerca trova anche la posizione", len(await page.query_selector_all("#ctab tbody tr")) == 1)
+            await page.fill("#fq", ""); await W(300)
+            await pick_name("Yu-Gi-Oh!", "Number 39")
+            check("un nome simile a un codice cerca comunque per nome", True)
+            await page.keyboard.press("Escape"); await ev("closeModal()")
+        await step("Codice del set e posizione", codice_posizione)
+
         async def vendita():
             ash = await ev("[...S.copies.values()].find(c => c.status !== 'venduto' && S.cards.get(c.card_id).name.startsWith('Ash Blossom') && c.buy_price === 8).id")
             await ev(f"orderForm({{items: ['{ash}']}})"); await W(400)
@@ -155,6 +180,28 @@ async def main():
             await page.click("#ocancel"); await W(300); await page.click("[data-yes]"); await W(900)
             check("annullare la vendita dall'ordine la rimette disponibile", (await ev(f"S.copies.get('{ash}')"))["status"] == "disponibile" and not await ev("S.orders.size"))
         await step("Vendite e annullamento", vendita)
+
+        async def spedizioni():
+            ash = await ev("[...S.copies.values()].find(c => c.status !== 'venduto' && S.cards.get(c.card_id).name.startsWith('Ash Blossom') && c.buy_price === 8).id")
+            await ev(f"orderForm({{items: ['{ash}']}})"); await W(300)
+            await page.fill("#orows [data-p]", "20"); await page.click("#of button.ok"); await W(900)
+            oid = await ev("[...S.orders.keys()][0]")
+            check("una nuova vendita è da spedire", await ev(f"S.orders.get('{oid}').ship_status") == "da_spedire")
+            await go("#/")
+            check("la Home avvisa degli ordini da spedire", "1 ordine da spedire" in await page.inner_text("#app"))
+            await go("#/vendite?stato=da_spedire")
+            check("la lista da spedire mostra le carte da preparare", "Ash Blossom" in await page.inner_text("#app"))
+            await page.click("[data-act=shipOrder]"); await W(300)
+            await page.fill("#shf [name=t]", "RR123456789IT"); await page.click("#shf button.pri"); await W(800)
+            o = await ev(f"S.orders.get('{oid}')")
+            check("segnato come spedito con tracking", o["ship_status"] == "spedito" and o["tracking"] == "RR123456789IT" and o["shipped_date"], o)
+            await go("#/vendite?stato=spedito"); await page.click("[data-act=deliverOrder]"); await W(800)
+            check("segnato come consegnato", await ev(f"S.orders.get('{oid}').ship_status") == "consegnato")
+            await go("#/")
+            check("nessun avviso quando non ci sono ordini da spedire", "da spedire" not in await page.inner_text("#app"))
+            await ev(f"orderView('{oid}')"); await W(300)
+            await page.click("#ocancel"); await W(300); await page.click("[data-yes]"); await W(900)
+        await step("Stato delle spedizioni", spedizioni)
 
         async def prezzo_richiesto():
             cid = await ev("[...S.copies.values()].find(c => c.status !== 'venduto').card_id")
@@ -216,7 +263,7 @@ async def main():
         await step("Immagini", immagini)
 
         async def pagine():
-            hashes = ["#/", "#/g/Yu-Gi-Oh!", "#/collezione", "#/vendite", "#/lotti", "#/giacenze", "#/guadagni", "#/dati", "#/collega",
+            hashes = ["#/", "#/g/Yu-Gi-Oh!", "#/collezione", "#/vendite", "#/lotti", "#/giacenze", "#/guadagni", "#/statistiche", "#/vendite?stato=da_spedire", "#/dati", "#/collega",
                       "#/c/" + await ev("[...S.cards.keys()][0]"), "#/lotto/" + await ev("[...S.lots.keys()][0]")]
             bad = []
             for h in hashes:
@@ -225,6 +272,10 @@ async def main():
                 if "Errore di visualizzazione" in txt or "non trovata" in txt.lower():
                     bad.append(h)
             check("tutte le pagine si aprono senza errori", not bad, bad)
+            await go("#/statistiche"); st = await page.inner_text("#app")
+            check("statistiche: tempo in magazzino, espansioni e lotti", "Quanto ci metti a vendere" in st and "Espansioni che rendono di più" in st and "Lotti a confronto" in st, st[:300])
+            data = await ev("(() => { const s = salesStats(''); return {q: s.qty, b: s.buckets.reduce((t, b) => t + b.n, 0), h: s.held.length} })()")
+            check("statistiche: le fasce di tempo contano tutte le copie con date", data["b"] == data["h"] and data["q"] > 0, data)
             for h in ["#/", "#/collezione"]:
                 await page.set_viewport_size({"width": 390, "height": 800}); await go(h)
                 check(f"vista da telefono {h}", "Errore" not in await page.inner_text("#app"))
@@ -283,8 +334,10 @@ async def main():
                     h = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"}
                     if r.request.method == "OPTIONS":
                         return await r.fulfill(status=200, headers=h, body="")
-                    ok = "rpc/guest_stock" in u and "A" * 30 in (r.request.post_data or "")
-                    return await r.fulfill(status=200, headers={**h, "Content-Type": "application/json"}, body=json.dumps(rows if ok else []))
+                    ok = "A" * 30 in (r.request.post_data or "")
+                    info = [{"title": "Vetrina di prova", "whatsapp": "333 1234567", "telegram": "dsr_carte"}]
+                    body = (rows if "guest_stock" in u else info) if ok else []
+                    return await r.fulfill(status=200, headers={**h, "Content-Type": "application/json"}, body=json.dumps(body))
                 return await route(r)
             await gp.route("**/*", groute)
             await gp.goto(URL + "#/vetrina/" + "A" * 30 + "?u=https%3A%2F%2Ftest.supabase.co&k=chiave-anon"); await gp.wait_for_timeout(1500)
@@ -297,7 +350,23 @@ async def main():
             check("ricerca nella vetrina", "Charizard" in t2 and "Ash Blossom" not in t2, t2[:200])
             await gp.fill("#gq", "carta che non ho"); await gp.wait_for_timeout(400)
             check("messaggio chiaro se la carta non c'è", "non è disponibile" in await gp.inner_text("#glist"))
-            only_rpc = all("rpc/guest_stock" in c[1] for c in calls if c[0] != "OPTIONS")
+            await gp.fill("#gq", ""); await gp.wait_for_timeout(400)
+            check("la vetrina mostra il suo nome", "Vetrina di prova" in await gp.inner_text("#app"))
+            await gp.click("[data-want='a1']"); await gp.wait_for_timeout(200)
+            await gp.select_option("[data-wq='a1']", "2"); await gp.click("[data-want='b2']"); await gp.wait_for_timeout(200)
+            bar = await gp.inner_text("#gbar")
+            check("barra della richiesta con 2 carte", "2 carte" in bar and "3 copie" in bar, bar)
+            await gp.evaluate("() => { window.__open = []; window.open = function (u){ window.__open.push(String(u)); return null; }; }")
+            await gp.click("#gbar [data-g=wa]"); await gp.wait_for_timeout(200)
+            opened = await gp.evaluate("window.__open")
+            from urllib.parse import unquote
+            u0 = unquote(opened[0]) if opened else ""
+            check("WhatsApp si apre con il messaggio già scritto", u0.startswith("https://wa.me/393331234567?text=") and "2× Ash Blossom" in u0 and "1× Charizard ex" in u0, u0[:160])
+            await gp.click("#gbar [data-g=tg]"); await gp.wait_for_timeout(200)
+            check("Telegram apre la chat del proprietario", (await gp.evaluate("window.__open"))[-1] == "https://t.me/dsr_carte")
+            await gp.click("#gbar [data-g=clear]"); await gp.wait_for_timeout(200)
+            check("la richiesta si può svuotare", not await gp.query_selector("#gbar"))
+            only_rpc = all("rpc/guest_stock" in c[1] or "rpc/guest_info" in c[1] for c in calls if c[0] != "OPTIONS")
             check("la vetrina usa solo la funzione di sola lettura", calls and only_rpc, calls[:3])
             await gp.goto(URL + "#/vetrina/" + "B" * 30 + "?u=https%3A%2F%2Ftest.supabase.co&k=chiave-anon"); await gp.wait_for_timeout(1200)
             check("un codice sbagliato non mostra nessuna carta", "Nessuna carta disponibile" in await gp.inner_text("#glist"))

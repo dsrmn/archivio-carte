@@ -134,6 +134,14 @@ alter table public.copies add column if not exists ask_price numeric(12,2);   --
 alter table public.copies add column if not exists ask_date  date;            -- da quando è in vendita a quel prezzo
 
 -- =============================================================
+-- Posizione delle copie e stato delle spedizioni
+-- =============================================================
+alter table public.copies add column if not exists location     text;   -- dove si trova (raccoglitore, scatola, pagina)
+alter table public.orders add column if not exists ship_status  text;   -- da_spedire | spedito | consegnato (vuoto = ordine vecchio)
+alter table public.orders add column if not exists tracking     text;   -- codice di tracciamento
+alter table public.orders add column if not exists shipped_date date;   -- data di spedizione
+
+-- =============================================================
 -- Vetrina: link di sola lettura con le carte disponibili
 -- Chi ha il link (con il codice segreto) vede solo nome, espansione,
 -- rarità, immagine, quantità, condizioni e lingue. Niente prezzi.
@@ -143,19 +151,25 @@ create table if not exists public.share_links (
   user_id     uuid not null default auth.uid() references auth.users(id) on delete cascade,
   created_at  timestamptz not null default now()
 );
+alter table public.share_links add column if not exists title         text;     -- nome della vetrina
+alter table public.share_links add column if not exists whatsapp      text;     -- numero per le richieste
+alter table public.share_links add column if not exists telegram      text;     -- username per le richieste
+alter table public.share_links add column if not exists show_location boolean not null default false;
 alter table public.share_links enable row level security;
 drop policy if exists share_links_own on public.share_links;
 create policy share_links_own on public.share_links for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
-create or replace function public.guest_stock(p_token text)
+drop function if exists public.guest_stock(text);
+create function public.guest_stock(p_token text)
 returns table (card_id uuid, game text, expansion text, name text, rarity text, image_url text,
-               qty bigint, conditions text, languages text)
+               qty bigint, conditions text, languages text, locations text)
 language sql stable security definer set search_path = public as $$
   select c.id, c.game, c.expansion, c.name, c.rarity, c.image_url,
          sum(cp.qty)::bigint,
          string_agg(distinct cp.condition, ','),
-         string_agg(distinct cp.language, ',')
+         string_agg(distinct cp.language, ','),
+         case when bool_or(s.show_location) then string_agg(distinct cp.location, ', ') end
   from share_links s
   join cards  c  on c.user_id = s.user_id
   join copies cp on cp.card_id = c.id and cp.status = 'disponibile'
@@ -164,3 +178,12 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke all on function public.guest_stock(text) from public;
 grant execute on function public.guest_stock(text) to anon, authenticated;
+
+create or replace function public.guest_info(p_token text)
+returns table (title text, whatsapp text, telegram text)
+language sql stable security definer set search_path = public as $$
+  select s.title, s.whatsapp, s.telegram from share_links s
+  where s.token = p_token and length(p_token) >= 24
+$$;
+revoke all on function public.guest_info(text) from public;
+grant execute on function public.guest_info(text) to anon, authenticated;
