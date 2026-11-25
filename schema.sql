@@ -214,3 +214,35 @@ create policy vetrina_requests_upd on public.vetrina_requests for update to auth
 drop policy if exists vetrina_requests_del on public.vetrina_requests;
 create policy vetrina_requests_del on public.vetrina_requests for delete to authenticated using (user_id = auth.uid());
 grant execute on function public.guest_stock(text) to service_role;
+
+-- ===== Analisi CardTrader / PokémonTCG (proposte di immagini e rarità, non modificano le carte) =====
+create table if not exists card_proposals (
+  card_id      uuid primary key references cards(id) on delete cascade,
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  status       text not null,              -- trovata | ambigua | non_trovata | espansione_non_trovata
+  ct_blueprint bigint,
+  ct_expansion text,
+  ct_name      text,
+  ct_version   text,
+  image_url    text,
+  rarity       text,
+  number       text,
+  candidates   integer not null default 0,
+  analyzed_at  timestamptz not null default now()
+);
+alter table card_proposals add column if not exists source text;   -- cardtrader | pokemontcg
+alter table card_proposals enable row level security;
+drop policy if exists card_proposals_own on card_proposals;
+create policy card_proposals_own on card_proposals for select to authenticated using (user_id = auth.uid());
+drop policy if exists card_proposals_del on card_proposals;
+create policy card_proposals_del on card_proposals for delete to authenticated using (user_id = auth.uid());
+
+create table if not exists ct_runs (
+  id         bigint generated always as identity primary key,
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  info       jsonb not null default '{}'::jsonb
+);
+alter table ct_runs enable row level security;
+drop policy if exists ct_runs_own on ct_runs;
+create policy ct_runs_own on ct_runs for select to authenticated using (user_id = auth.uid());

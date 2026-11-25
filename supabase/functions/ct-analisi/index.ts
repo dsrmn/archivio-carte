@@ -1,5 +1,6 @@
 // Analisi CardTrader: per le carte Yu-Gi-Oh!, One Piece e Pokémon dell'utente cerca la stampa su CardTrader
 // (immagine, rarità, numero) e salva le proposte in card_proposals. Non modifica le carte.
+// Per i Pokémon che CardTrader non trova prova il database pubblico PokémonTCG (api.pokemontcg.io).
 // Segreto richiesto: CARDTRADER_TOKEN (Edge Functions → Secrets).
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -29,6 +30,29 @@ const imgOf = (b: Bp) => {
   const u = im?.show?.url || im?.url || (b.image_url as string) || "";
   return u ? (u.startsWith("http") ? u : "https://www.cardtrader.com" + u) : "";
 };
+
+/** ripiego per i Pokémon che CardTrader non trova: database pubblico PokémonTCG (carte inglesi, scansioni ufficiali) */
+const PTCG = "https://api.pokemontcg.io/v2/cards";
+type Ptcg = { id: string; name: string; number: string; rarity?: string; set: { id: string; name: string; printedTotal?: number; total?: number }; images?: { small?: string; large?: string } };
+async function ptcgFind(c: Record<string, unknown>): Promise<{ hit: Ptcg | null; n: number }> {
+  const raw = String(c.name).replace(/\s*\([^()]*\)\s*$/, "").replace(/"/g, "").trim();
+  const num = numOnly(cardNum(String(c.name)));
+  const tot = (String(c.name).match(/\/\s*0*(\d+)\s*\)?\s*$/) || [])[1];
+  const key = Deno.env.get("POKEMONTCG_API_KEY");
+  const get = async (q: string) => {
+    const r = await fetch(`${PTCG}?q=${encodeURIComponent(q)}&pageSize=250&select=id,name,number,rarity,set,images`, { headers: key ? { "X-Api-Key": key } : {}, signal: AbortSignal.timeout(20000) });
+    if (!r.ok) throw new Error(`PokémonTCG: ${r.status}`);
+    return ((await r.json()).data ?? []).filter((x: Ptcg) => fold(x.name) === fold(raw)) as Ptcg[];
+  };
+  let list = num ? await get(`name:"${raw}" number:${num}`) : [];
+  if (!list.length) list = await get(`name:"${raw}"`);   // promo e numerazioni diverse: riprova senza numero
+  const k = expKey(String(c.expansion ?? "")).replace(/^sv /, "scarlet and violet ").replace(/^swsh /, "sword and shield ").replace(/^sm /, "sun and moon ");
+  const pick = (f: (x: Ptcg) => boolean) => { const y = list.filter(f); if (y.length) list = y; };
+  if (list.length > 1 && k) { const ex = list.filter((x) => expKey(x.set.name) === k); if (ex.length) list = ex; else pick((x) => { const e = expKey(x.set.name); return e.length > 3 && (e.includes(k) || k.includes(e)); }); }
+  if (list.length > 1 && tot) pick((x) => String(x.set.printedTotal) === tot);
+  if (list.length > 1 && c.rarity) pick((x) => fold(x.rarity) === fold(c.rarity));
+  return { hit: list.length === 1 ? list[0] : null, n: list.length };
+}
 
 let cache: { at: number; games: Record<string, number>; exps: { id: number; game_id: number; name: string; code: string }[] } | null = null;
 async function ct(path: string, token: string) {
@@ -115,6 +139,18 @@ Deno.serve(async (req) => {
       }
       } catch (err) { errors.push(`${game} · ${expansion}: ${String((err as Error)?.message || err)}`); }
     }
+    // Pokémon non trovati o incerti su CardTrader → PokémonTCG
+    const byId = new Map(cards.map((c) => [c.id, c]));
+    for (const row of rows) {
+      const c = byId.get(row.card_id); if (!c || c.game !== "Pokémon" || row.status === "trovata") continue;
+      try {
+        const { hit } = await ptcgFind(c);
+        if (hit) Object.assign(row, { status: "trovata", source: "pokemontcg", candidates: 1, ct_blueprint: null, ct_expansion: hit.set.name, ct_name: hit.name, ct_version: null,
+          image_url: hit.images?.large || hit.images?.small || null, rarity: hit.rarity || null, number: hit.set.printedTotal ? `${hit.number}/${hit.set.printedTotal}` : hit.number });
+      } catch (err) { errors.push(`Pokémon · ${c.name}: ${String((err as Error)?.message || err)}`); }
+      await new Promise((s) => setTimeout(s, 120));
+    }
+    for (const row of rows) if (!row.source) row.source = "cardtrader";
     for (let i = 0; i < rows.length; i += 500) { const { error } = await db.from("card_proposals").upsert(rows.slice(i, i + 500)); if (error) throw error; }
     info.unmatched = unmatched; info.errors = errors; info.saved = rows.length;
     await db.from("ct_runs").insert({ user_id: user.id, info });
