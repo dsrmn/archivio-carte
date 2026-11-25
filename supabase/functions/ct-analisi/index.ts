@@ -15,6 +15,8 @@ const baseName = (n: string) => fold(String(n).replace(/\s*\([^()]*\)\s*$/, "").
 const numKey = (s: unknown) => { const m = String(s ?? "").toUpperCase().match(/([A-Z]{1,5}\d{0,2}-?[A-Z]{0,2})?\s*0*(\d{1,4}[A-Z]?)(?:\s*\/\s*\d+)?\s*$/); return m ? (m[1] ? m[1].replace(/[^A-Z0-9]/g, "") + "-" : "") + m[2] : ""; };
 const numOnly = (s: unknown) => (String(s ?? "").match(/0*(\d{1,4})[A-Z]?(?:\s*\/\s*\d+)?\s*$/i) || [])[1] || "";
 const cardNum = (name: string) => { const v = String(name).match(/\(([^()]*)\)\s*$/)?.[1] || ""; const part = v.split("|").map((x) => x.trim()).find((x) => /\d/.test(x) && !/^©/.test(x)); return part ? part.replace(/^No\.?\s*/i, "") : ""; };
+/** "mega" corrisponde a "mega evolution" ma non a "megalo cannon": confronto per parole intere */
+const hasWords = (a: string, b: string) => b.length > 2 && (" " + a + " ").includes(" " + b + " ");
 const expKey = (n: string) => fold(n).replace(/\b(the|ocg|tcg)\b/g, " ").replace(/\s+/g, " ").trim();
 /** primo valore stringa con chiave che contiene `part` (cerca anche negli oggetti annidati) */
 function findProp(o: unknown, part: RegExp, depth = 0): string {
@@ -39,16 +41,27 @@ async function ptcgFind(c: Record<string, unknown>): Promise<{ hit: Ptcg | null;
   const num = numOnly(cardNum(String(c.name)));
   const tot = (String(c.name).match(/\/\s*0*(\d+)\s*\)?\s*$/) || [])[1];
   const key = Deno.env.get("POKEMONTCG_API_KEY");
-  const get = async (q: string) => {
-    const r = await fetch(`${PTCG}?q=${encodeURIComponent(q)}&pageSize=250&select=id,name,number,rarity,set,images`, { headers: key ? { "X-Api-Key": key } : {}, signal: AbortSignal.timeout(20000) });
-    if (!r.ok) throw new Error(`PokémonTCG: ${r.status}`);
-    return ((await r.json()).data ?? []).filter((x: Ptcg) => fold(x.name) === fold(raw)) as Ptcg[];
+  const get = async (q: string): Promise<Ptcg[]> => {
+    let last = "";
+    for (let i = 0; i < 3; i++) {   // il servizio a volte risponde 500 o va in timeout: riprova con una pausa
+      if (i) await new Promise((s) => setTimeout(s, 1500 * i));
+      try {
+        const r = await fetch(`${PTCG}?q=${encodeURIComponent(q)}&pageSize=250&select=id,name,number,rarity,set,images`, { headers: key ? { "X-Api-Key": key } : {}, signal: AbortSignal.timeout(12000) });
+        if (r.status >= 500 || r.status === 429) { last = String(r.status); continue; }
+        if (!r.ok) throw new Error(`PokémonTCG: ${r.status}`);
+        return ((await r.json()).data ?? []).filter((x: Ptcg) => fold(x.name) === fold(raw));
+      } catch (e) { if (String((e as Error)?.message).startsWith("PokémonTCG")) throw e; last = String((e as Error)?.name || e); }
+    }
+    throw new Error(`PokémonTCG: ${last} (3 tentativi)`);
   };
+  const rar = String(c.rarity ?? "").replace(/"/g, "").trim();
+  // dalla ricerca più stretta alla più larga: numero → rarità → solo nome
   let list = num ? await get(`name:"${raw}" number:${num}`) : [];
-  if (!list.length) list = await get(`name:"${raw}"`);   // promo e numerazioni diverse: riprova senza numero
+  if (!list.length && rar) list = await get(`name:"${raw}" rarity:"${rar}"`);
+  if (!list.length) list = await get(`name:"${raw}"`);
   const k = expKey(String(c.expansion ?? "")).replace(/^sv /, "scarlet and violet ").replace(/^swsh /, "sword and shield ").replace(/^sm /, "sun and moon ");
   const pick = (f: (x: Ptcg) => boolean) => { const y = list.filter(f); if (y.length) list = y; };
-  if (list.length > 1 && k) { const ex = list.filter((x) => expKey(x.set.name) === k); if (ex.length) list = ex; else pick((x) => { const e = expKey(x.set.name); return e.length > 3 && (e.includes(k) || k.includes(e)); }); }
+  if (list.length > 1 && k) { const ex = list.filter((x) => expKey(x.set.name) === k); if (ex.length) list = ex; else pick((x) => { const e = expKey(x.set.name); return hasWords(e, k) || hasWords(k, e); }); }
   if (list.length > 1 && tot) pick((x) => String(x.set.printedTotal) === tot);
   if (list.length > 1 && c.rarity) pick((x) => fold(x.rarity) === fold(c.rarity));
   return { hit: list.length === 1 ? list[0] : null, n: list.length };
@@ -103,14 +116,15 @@ Deno.serve(async (req) => {
       const gid = cat.games[game], mine = cards.filter((c) => c.game === game && (c.expansion ?? "") === expansion);
       const k = expKey(expansion);
       let exps = cat.exps.filter((e) => e.game_id === gid && expKey(e.name) === k);
-      if (!exps.length && k) exps = cat.exps.filter((e) => e.game_id === gid && (expKey(e.name).includes(k) || k.includes(expKey(e.name))) && expKey(e.name).length > 3);
+      if (!exps.length && k) exps = cat.exps.filter((e) => e.game_id === gid && (hasWords(expKey(e.name), k) || hasWords(k, expKey(e.name))))
+        .sort((a, b) => Number(expKey(b.name).startsWith(k + " ")) - Number(expKey(a.name).startsWith(k + " ")) || a.name.length - b.name.length);
       if (!exps.length) {
         unmatched.push(`${game} · ${expansion}`);
         for (const c of mine) rows.push({ card_id: c.id, user_id: user.id, status: "espansione_non_trovata", candidates: 0, analyzed_at: new Date().toISOString() });
         continue;
       }
       const bps: Bp[] = [];
-      for (const e of exps.slice(0, 3)) {
+      for (const e of exps.slice(0, 4)) {
         try { const r = await ct(`/blueprints/export?expansion_id=${e.id}`, token); bps.push(...(Array.isArray(r) ? r : r.array ?? []).map((b: Bp) => ({ ...b, _exp: e.name }))); }
         catch (err) { errors.push(`${game} · ${expansion}: ${String((err as Error)?.message || err)}`); }
       }
