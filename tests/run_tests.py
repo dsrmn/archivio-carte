@@ -197,6 +197,36 @@ async def main():
             await ev("closeModal(); S.requests = new Map(); S.noReq = true; 1")
         await step("Richieste dalla vetrina", richieste)
 
+        async def anteprima():
+            await go("#/")
+            prep = await ev("""(() => { const C = [...S.cards.values()].filter(c => c.game === 'Yu-Gi-Oh!' && cmFor(c) && exactImageUrl(c)).slice(0, 6);
+              C.forEach(c => S.cards.set(c.id, {...S.cards.get(c.id), image_url: null}));
+              const r = [...S.cards.values()].find(c => c.game === 'Yu-Gi-Oh!' && c.rarity && cmMatch(c).status === 'ok' && !cmMatch(c).guessed && cmMatch(c).p.rar && !cmMatch(c).p.rarAll);
+              if (r){ S.cards.set(r.id, {...r, rarity: ''}); } index();
+              return {ids: C.map(c => c.id), rid: r ? r.id : null, rar: r ? r.rarity : null}; })()""")
+            check("anteprima: ci sono carte senza immagine da provare", len(prep["ids"]) >= 3, prep)
+            await ev("previewStart()"); await W(700)
+            t = await page.inner_text("body")
+            check("anteprima: avviso in alto con il conteggio", "Anteprima" in t and "immagini" in t and "Salva tutto" in t)
+            imgs = await ev(f"{json.dumps(prep['ids'])}.map(id => !!S.cards.get(id).image_url)")
+            check("anteprima: le carte mostrano l'immagine trovata", all(imgs), imgs)
+            if prep["rid"]: check("anteprima: la rarità trovata compare", await ev(f"S.cards.get('{prep['rid']}').rarity") == prep["rar"])
+            ok = await ev("commit('prova', async tx => {})")
+            check("anteprima: nessuna modifica possibile finché non salvi o esci", ok is False)
+            await page.click("[data-act=pvOnly]"); await W(500)
+            n = len(await page.query_selector_all("#ctab .gcard"))
+            check("anteprima: 'solo le carte cambiate' mostra solo quelle", n == await ev("PV.changes.size"), n)
+            await page.click("[data-act=pvStop]"); await W(400)
+            back = await ev(f"{json.dumps(prep['ids'])}.every(id => !S.cards.get(id).image_url)")
+            check("esci senza salvare: tutto torna com'era", back and not await page.query_selector(".pvbar"))
+            await ev("previewStart()"); await W(500); await page.click("[data-act=pvSave]"); await W(900)
+            saved = await ev(f"{json.dumps(prep['ids'])}.every(id => !!S.cards.get(id).image_url) && JSON.parse(localStorage.getItem('cardarchive.local.cards') || '[]').filter(r => {json.dumps(prep['ids'])}.includes(r.id)).every(r => r.image_url)")
+            check("salva tutto: immagini salvate davvero", saved)
+            if prep["rid"]: check("salva tutto: rarità salvata", await ev(f"S.cards.get('{prep['rid']}').rarity") == prep["rar"])
+            await ev("undo()"); await W(700)
+            check("si può annullare il salvataggio", await ev(f"{json.dumps(prep['ids'])}.every(id => !S.cards.get(id).image_url)"))
+        await step("Anteprima immagini e rarità", anteprima)
+
         async def vendita():
             ash = await ev("[...S.copies.values()].find(c => c.status !== 'venduto' && S.cards.get(c.card_id).name.startsWith('Ash Blossom') && c.buy_price === 8).id")
             await ev(f"orderForm({{items: ['{ash}']}})"); await W(400)
