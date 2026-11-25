@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
       if (!exps.length && k) exps = cat.exps.filter((e) => e.game_id === gid && (expKey(e.name).includes(k) || k.includes(expKey(e.name))) && expKey(e.name).length > 3);
       if (!exps.length) {
         unmatched.push(`${game} · ${expansion}`);
-        for (const c of mine) rows.push({ card_id: c.id, user_id: user.id, status: "espansione_non_trovata", candidates: 0 });
+        for (const c of mine) rows.push({ card_id: c.id, user_id: user.id, status: "espansione_non_trovata", candidates: 0, analyzed_at: new Date().toISOString() });
         continue;
       }
       const bps: Bp[] = [];
