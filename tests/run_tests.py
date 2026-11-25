@@ -227,6 +227,31 @@ async def main():
             check("si può annullare il salvataggio", await ev(f"{json.dumps(prep['ids'])}.every(id => !S.cards.get(id).image_url)"))
         await step("Anteprima immagini e rarità", anteprima)
 
+        async def analisi_ct():
+            ids = await ev("""(() => { const C = [...S.cards.values()].filter(c => c.game === 'Yu-Gi-Oh!').slice(0, 3);
+              S.cards.set(C[0].id, {...C[0], image_url: null, rarity: ''}); S.cards.set(C[1].id, {...C[1], rarity: 'Common'}); S.cards.set(C[2].id, {...C[2], image_url: 'https://images.ygoprodeck.com/x.jpg'}); index();
+              return C.map(c => c.id); })()""")
+            rows = [{"card_id": ids[0], "status": "trovata", "image_url": "https://www.cardtrader.com/a.jpg", "rarity": "Ultra Rare", "ct_name": "A", "candidates": 1, "analyzed_at": "2026-11-25T12:00:00Z"},
+                    {"card_id": ids[1], "status": "trovata", "image_url": None, "rarity": "Secret Rare", "ct_name": "B", "candidates": 1, "analyzed_at": "2026-11-25T12:00:00Z"},
+                    {"card_id": ids[2], "status": "trovata", "image_url": "https://www.cardtrader.com/c.jpg", "rarity": None, "ct_name": "C", "candidates": 1, "analyzed_at": "2026-11-25T12:00:00Z"}]
+            await ev(f"(() => {{ S.mode = 'supabase'; CTA.rows = new Map({json.dumps(rows)}.map(r => [r.card_id, r])); return 1; }})()")
+            await go("#/analisi"); t = await page.inner_text("#app")
+            k = await ev("(() => { const k = ctClassify(); return Object.fromEntries(Object.entries(k).map(([a, b]) => [a, b.length])); })()")
+            check("analisi: carte divise per stato", k["miss_img"] == 1 and k["miss_rar"] == 1 and k["diff_rar"] == 1 and k["has_img"] == 1, k)
+            check("analisi: pagina con riepilogo e scelte", "Immagini mancanti trovate" in t and "Rarità diverse" in t and "Cosa applicare" in t, t[:200])
+            await page.click("[data-ctshow=diff]"); await W(200)
+            check("analisi: elenco delle rarità diverse", "Secret Rare" in await page.inner_text("#app"))
+            st = await ev("ctChanges(ctClassify()).stats")
+            check("di base: solo mancanti (1 immagine, 1 rarità)", st["img"] == 1 and st["rar"] == 1, st)
+            await page.check("[data-ctopt=rarFix]"); await page.check("[data-ctopt=imgAll]"); await W(200)
+            st = await ev("ctChanges(ctClassify()).stats")
+            check("con le opzioni: anche rarità diverse e scansioni", st["img"] == 2 and st["rar"] == 2, st)
+            await page.click("[data-act=ctPreview]"); await W(600)
+            pv = await ev(f"[PV.on, S.cards.get('{ids[1]}').rarity, S.cards.get('{ids[2]}').image_url]")
+            check("analisi → anteprima del sito con le modifiche", pv == [True, "Secret Rare", "https://www.cardtrader.com/c.jpg"], pv)
+            await ev("S.mode = 'local'; previewStop(); CTA.rows = null; CTA.opt = {img: true, rar: true, rarFix: false, imgAll: false}; 1"); await W(300)
+        await step("Analisi CardTrader", analisi_ct)
+
         async def vendita():
             ash = await ev("[...S.copies.values()].find(c => c.status !== 'venduto' && S.cards.get(c.card_id).name.startsWith('Ash Blossom') && c.buy_price === 8).id")
             await ev(f"orderForm({{items: ['{ash}']}})"); await W(400)
