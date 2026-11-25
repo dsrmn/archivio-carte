@@ -277,6 +277,28 @@ async def main():
             check("annullare la vendita dall'ordine la rimette disponibile", (await ev(f"S.copies.get('{ash}')"))["status"] == "disponibile" and not await ev("S.orders.size"))
         await step("Vendite e annullamento", vendita)
 
+        async def sconto():
+            two = await ev("[...S.copies.values()].filter(c => c.status !== 'venduto' && c.qty >= 1).slice(0, 2).map(c => c.id)")
+            await ev(f"orderForm({{items: {json.dumps(two)}}})"); await W(400)
+            ps = await page.query_selector_all("#orows [data-p]")
+            await ps[0].fill("10"); await ps[1].fill("1"); await W(150)
+            await page.fill("#odisc", "4"); await page.click("#odiscgo"); await W(200)
+            v = [await e.input_value() for e in await page.query_selector_all("#orows [data-p]")]
+            check("sconto 4 € su 10 + 1: parti uguali, mai sotto zero (7,00 e 0,00)", v == ["7,00", "0,00"], v)
+            await page.click("#odiscundo"); await W(200)
+            v = [await e.input_value() for e in await page.query_selector_all("#orows [data-p]")]
+            check("Togli sconto rimette i prezzi di prima", v == ["10", "1"], v)
+            await page.fill("#odisc", "1"); await page.click("#odiscgo"); await W(200)
+            v = [await e.input_value() for e in await page.query_selector_all("#orows [data-p]")]
+            check("sconto 1 €: 0,50 a carta (9,50 e 0,50)", v == ["9,50", "0,50"], v)
+            check("riepilogo mostra lo sconto", "− sconto" in await page.inner_text("#osum"))
+            await page.click("#of button.ok"); await W(900)
+            o = await ev("[...S.orders.values()].at(-1)")
+            tot = await ev(f"[...S.copies.values()].filter(c => c.order_id === '{o['id']}').reduce((s, c) => s + c.sell_price, 0)")
+            check("vendita registrata a 10,00 € con la nota dello sconto", abs(tot - 10) < 0.001 and "Sconto" in (o.get("notes") or ""), [tot, o.get("notes")])
+            await page.click("[data-act=undo]"); await W(800)
+        await step("Sconto sul totale", sconto)
+
         async def spedizioni():
             ash = await ev("[...S.copies.values()].find(c => c.status !== 'venduto' && S.cards.get(c.card_id).name.startsWith('Ash Blossom') && c.buy_price === 8).id")
             await ev(f"orderForm({{items: ['{ash}']}})"); await W(300)

@@ -308,7 +308,7 @@ a.btn.cmlink{border-color:#1f5d70;color:var(--blue)}a.btn.cmlink:hover{backgroun
 .t th{background:#120d2e;color:var(--blue);text-transform:none;letter-spacing:.3px;font-weight:600;font-size:12.5px}
 .t tbody tr:nth-child(even){background:rgba(255,255,255,.015)}.t tbody tr:hover{background:var(--hover)}.t tbody tr.sel{background:rgba(255,61,203,.1)}
 .t tfoot td{background:#120d2e}
-.b.rar{background:#2a1d5c;color:#d9ccff}.b.src-ptcg{background:#3a2f0b;color:#ffd75e}.b.lang{background:#1a2648;color:#a9c4ff;display:inline-flex;align-items:center;gap:4px}.b.lang .flag{width:16px;height:11px;border-radius:2px;flex:none;box-shadow:0 0 0 1px rgba(255,255,255,.18)}.b.lang .lq{opacity:.6;margin-left:-2px}.lotb{background:#3a2a10;color:var(--orange)}
+.b.rar{background:#2a1d5c;color:#d9ccff}.odisc{margin-top:12px;padding:10px 12px;border:1px dashed rgba(255,255,255,.18);border-radius:10px}.b.src-ptcg{background:#3a2f0b;color:#ffd75e}.b.lang{background:#1a2648;color:#a9c4ff;display:inline-flex;align-items:center;gap:4px}.b.lang .flag{width:16px;height:11px;border-radius:2px;flex:none;box-shadow:0 0 0 1px rgba(255,255,255,.18)}.b.lang .lq{opacity:.6;margin-left:-2px}.lotb{background:#3a2a10;color:var(--orange)}
 .seg{border-color:var(--line);border-radius:4px}.seg button.on,.seg a.on{background:var(--neon);color:#0b0820}
 a.panel.banner{border-color:#8a6a20;background:linear-gradient(90deg,rgba(255,225,77,.12),var(--card))}
 a.panel.banner.ship{border-color:#8a2a6a;background:linear-gradient(90deg,rgba(255,61,203,.16),var(--card))}
@@ -2459,6 +2459,8 @@ function orderForm(pre = {}){
     <h3 style="margin:16px 0 4px">Carte vendute</h3>
     <div id="orows"></div>
     <div style="margin-top:10px"><div><input class="inp" id="oadd" placeholder="＋ Aggiungi una carta a questo ordine: scrivi il nome…"></div></div>
+    <div class="odisc"><label class="f" for="odisc">Sconto sul totale €</label><div class="row" style="gap:8px;flex-wrap:nowrap"><input class="inp" id="odisc" inputmode="decimal" placeholder="0,00" style="max-width:120px"><button type="button" class="btn" id="odiscgo">Applica</button><button type="button" class="btn" id="odiscundo" hidden>Togli sconto</button></div>
+      <div class="small muted" id="odischint" style="margin-top:3px">Tolto in parti uguali da ogni carta (per copia).</div></div>
     <div class="fg" style="margin-top:14px">
       <div><label class="f">Spedizione pagata dall'acquirente €</label><input class="inp" name="sc" inputmode="decimal" value="${fmtIn(SET.shipCharged)}" placeholder="0,00"></div>
       <div><label class="f">Tuo costo spedizione + imballaggio €</label><input class="inp" name="sk" inputmode="decimal" value="${fmtIn(SET.shipCost)}" placeholder="0,00"></div>
@@ -2472,6 +2474,33 @@ function orderForm(pre = {}){
     let feeTouched = false;
     $('[data-c]', m).onclick = closeModal;
     const itemsTotal = () => sum(rows, r => num(r.price) || 0);
+    let disc = null;   // {amount, before: [prezzi scritti prima dello sconto]}
+    /** prezzo della riga, o la stima mostrata come suggerimento se è vuoto */
+    const basePrice = (r, price = r.price) => { const v = num(price); if (v != null) return v; const x = S.copies.get(r.id), est = x.ask_price ?? estCopy(S.cards.get(x.card_id), x); return est != null ? round2(est * r.qty) : null; };
+    const applyDiscount = () => {
+      const D = round2(num($('#odisc', m).value) || 0);
+      if (!rows.length){ toast('Aggiungi prima le carte', 'err'); return; }
+      if (D <= 0){ toast('Scrivi l\'importo dello sconto', 'err'); $('#odisc', m).focus(); return; }
+      const before = disc ? disc.before : rows.map(r => r.price), base = rows.map((r, i) => basePrice(r, before[i]));
+      const miss = base.findIndex(v => v == null);
+      if (miss >= 0){ toast('Prima scrivi il prezzo di ogni carta', 'err'); $$('[data-p]', m)[miss]?.focus(); return; }
+      const tot = round2(sum(base, v => v));
+      if (D >= tot){ toast(`Lo sconto deve essere minore del totale (${eur(tot)})`, 'err'); return; }
+      // parti uguali per copia; se una carta arriverebbe sotto zero si ferma a zero e il resto va sulle altre
+      const out = base.slice(); let left = D, open = rows.map((_, i) => i).filter(i => out[i] > 0);
+      while (left > 0.0001 && open.length){
+        const units = sum(open, i => rows[i].qty), per = left / units;
+        let used = 0; const next = [];
+        for (const i of open){ const cut = Math.min(out[i], per * rows[i].qty); out[i] -= cut; used += cut; if (out[i] > 0.0001) next.push(i); }
+        left -= used; open = next;
+      }
+      const rounded = out.map(round2), diff = round2(tot - D - sum(rounded, v => v));
+      if (diff){ const j = rounded.indexOf(Math.max(...rounded)); rounded[j] = round2(rounded[j] + diff); }
+      disc = {amount: D, before};
+      rows.forEach((r, i) => { r.price = rounded[i].toFixed(2).replace('.', ','); });
+      drawRows(); upd();
+    };
+    const undoDiscount = () => { if (!disc) return; rows.forEach((r, i) => { r.price = disc.before[i] ?? ''; }); disc = null; $('#odisc', m).value = ''; drawRows(); upd(); };
     const drawRows = () => {
       $('#orows', m).innerHTML = rows.length ? rows.map((r, i) => {
         const x = S.copies.get(r.id), c = S.cards.get(x.card_id), est = x.ask_price ?? estCopy(c, x);
@@ -2501,8 +2530,10 @@ function orderForm(pre = {}){
       let cost = 0, sGross = 0, lotQ = 0, unk = 0;
       rows.forEach(r => { const x = S.copies.get(r.id), p = num(r.price) || 0; if (x.lot_id) lotQ += r.qty; else if (x.buy_price == null) unk += r.qty; else { cost += x.buy_price * r.qty; sGross += p; } });
       const sNet = items ? sGross * net / items : 0;
+      $('#odiscundo', m).hidden = !disc;
+      $('#odischint', m).textContent = disc ? `Sconto di ${eur(disc.amount)} applicato: tolto in parti uguali da ogni carta (per copia).` : 'Tolto in parti uguali da ogni carta (per copia).';
       $('#osum', m).innerHTML = `<div class="osum-g">
-          <span>Articoli</span><b>${eur(items)}</b>
+          ${disc ? `<span>Articoli prima dello sconto</span><b>${eur(items + disc.amount)}</b><span>− sconto</span><b>${eur(disc.amount)}</b>` : ''}<span>Articoli${disc ? ' scontati' : ''}</span><b>${eur(items)}</b>
           <span>+ spedizione pagata dall'acquirente</span><b>${eur(sc)}</b>
           <span>− commissione</span><b>${eur(fee)}</b>
           <span>− spedizione e imballaggio</span><b>${eur(sk)}</b>
@@ -2510,7 +2541,10 @@ function orderForm(pre = {}){
         </div>
         <div class="small muted" style="margin-top:8px">${cost ? `Margine netto sulle carte singole: ${signEur(sNet - cost)}` : ''}${lotQ ? `${cost ? ' · ' : ''}${lotQ} ${lotQ === 1 ? 'carta' : 'carte'} da lotto: il ricavo va a ripagare il lotto` : ''}${unk ? ` · ${unk} senza prezzo d'acquisto` : ''}</div>`;
     };
-    f.addEventListener('input', e => { if (e.target.closest('.orow') || e.target.id === 'oadd') return; if (e.target === E('fee')) feeTouched = true; upd(); });
+    $('#odiscgo', m).onclick = applyDiscount;
+    $('#odiscundo', m).onclick = undoDiscount;
+    $('#odisc', m).addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); applyDiscount(); } });
+    f.addEventListener('input', e => { if (e.target.closest('.orow') || e.target.id === 'oadd' || e.target.id === 'odisc') return; if (e.target === E('fee')) feeTouched = true; upd(); });
     autocomplete($('#oadd', m), async (q, cb) => {
       const fq = fold(q); if (!fq){ cb([]); return; }
       cb([...S.copies.values()].filter(x => x.status !== 'venduto').map(x => ({x, c: S.cards.get(x.card_id)}))
@@ -2525,7 +2559,7 @@ function orderForm(pre = {}){
       const date = E('date').value || today(), pl = clean(E('platform').value) || null;
       localStorage.setItem('cardarchive.lastPlatform', pl || '');
       const order = {id: uid(), sell_date: date, platform: pl, buyer: clean(E('buyer').value) || null, shipping_charged: round2(num(E('sc').value) || 0),
-        shipping_cost: round2(num(E('sk').value) || 0), fee: round2(num(E('fee').value) || 0), notes: clean(E('notes').value) || null};
+        shipping_cost: round2(num(E('sk').value) || 0), fee: round2(num(E('fee').value) || 0), notes: [clean(E('notes').value), disc ? `Sconto ${eur(disc.amount)} sul totale` : ''].filter(Boolean).join(' · ') || null};
       if (!S.noShip){ order.ship_status = E('ship')?.value || 'da_spedire'; if (order.ship_status !== 'da_spedire') order.shipped_date = date; }
       const before = lotSnapshot([...new Set(rows.map(r => S.copies.get(r.id).lot_id).filter(Boolean))]);
       const n = sum(rows, r => r.qty), tot = itemsTotal();
