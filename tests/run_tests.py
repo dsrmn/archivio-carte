@@ -282,12 +282,12 @@ async def main():
             await ev(f"orderForm({{items: {json.dumps(two)}}})"); await W(400)
             ps = await page.query_selector_all("#orows [data-p]")
             await ps[0].fill("10"); await ps[1].fill("1"); await W(150)
-            await page.fill("#odisc", "4"); await page.click("#odiscgo"); await W(200)
+            await page.select_option("#odmode", "disc"); await page.fill("#odisc", "4"); await page.click("#odiscgo"); await W(200)
             v = [await e.input_value() for e in await page.query_selector_all("#orows [data-p]")]
             check("sconto 4 € su 10 + 1: parti uguali, mai sotto zero (7,00 e 0,00)", v == ["7,00", "0,00"], v)
             await page.click("#odiscundo"); await W(200)
             v = [await e.input_value() for e in await page.query_selector_all("#orows [data-p]")]
-            check("Togli sconto rimette i prezzi di prima", v == ["10", "1"], v)
+            check("Ripristina prezzi rimette i prezzi di prima", v == ["10", "1"], v)
             await page.fill("#odisc", "1"); await page.click("#odiscgo"); await W(200)
             v = [await e.input_value() for e in await page.query_selector_all("#orows [data-p]")]
             check("sconto 1 €: 0,50 a carta (9,50 e 0,50)", v == ["9,50", "0,50"], v)
@@ -298,6 +298,23 @@ async def main():
             check("vendita registrata a 10,00 € con la nota dello sconto", abs(tot - 10) < 0.001 and "Sconto" in (o.get("notes") or ""), [tot, o.get("notes")])
             await page.click("[data-act=undo]"); await W(800)
         await step("Sconto sul totale", sconto)
+
+        async def prezzo_totale():
+            two = await ev("[...S.copies.values()].filter(c => c.status !== 'venduto' && !c.lot_id && c.buy_price != null && c.qty >= 2).slice(0, 2).map(c => c.id)")
+            costs = await ev(f"{json.dumps(two)}.map(id => S.copies.get(id).buy_price)")
+            await ev(f"orderForm({{items: {json.dumps(two)}}})"); await W(400)
+            qs = await page.query_selector_all("#orows [data-q]")
+            await qs[1].fill("2"); await W(150)
+            T = round(costs[0] + 2 * costs[1] + 6, 2)   # 3 copie → margine 2 € per copia
+            await page.fill("#odisc", str(T).replace(".", ",")); await page.click("#odiscgo"); await W(250)
+            v = [float((await e.input_value()).replace(",", ".")) for e in await page.query_selector_all("#orows [data-p]")]
+            check("prezzo totale: ogni copia ha lo stesso margine (+2 €)", abs(v[0] - (costs[0] + 2)) < 0.011 and abs(v[1] - (2 * costs[1] + 4)) < 0.011 and abs(sum(v) - T) < 0.001, [costs, T, v])
+            check("il suggerimento mostra il margine per copia", "+2,00" in await page.inner_text("#odischint"), await page.inner_text("#odischint"))
+            await page.fill("#odisc", "0,5"); await page.click("#odiscgo"); await W(250)
+            v = [float((await e.input_value()).replace(",", ".")) for e in await page.query_selector_all("#orows [data-p]")]
+            check("totale sotto il costo: niente prezzi negativi, somma giusta, avviso", min(v) >= 0 and abs(sum(v) - 0.5) < 0.001 and "sotto il prezzo pagato" in await page.inner_text("#odischint"), v)
+            await page.click("[data-c]"); await W(300)
+        await step("Prezzo totale con margine uguale", prezzo_totale)
 
         async def spedizioni():
             ash = await ev("[...S.copies.values()].find(c => c.status !== 'venduto' && S.cards.get(c.card_id).name.startsWith('Ash Blossom') && c.buy_price === 8).id")
