@@ -308,7 +308,7 @@ a.btn.cmlink{border-color:#1f5d70;color:var(--blue)}a.btn.cmlink:hover{backgroun
 .t th{background:#120d2e;color:var(--blue);text-transform:none;letter-spacing:.3px;font-weight:600;font-size:12.5px}
 .t tbody tr:nth-child(even){background:rgba(255,255,255,.015)}.t tbody tr:hover{background:var(--hover)}.t tbody tr.sel{background:rgba(255,61,203,.1)}
 .t tfoot td{background:#120d2e}
-.b.rar{background:#2a1d5c;color:#d9ccff}.b.lang{background:#1a2648;color:#a9c4ff}.lotb{background:#3a2a10;color:var(--orange)}
+.b.rar{background:#2a1d5c;color:#d9ccff}.b.lang{background:#1a2648;color:#a9c4ff;display:inline-flex;align-items:center;gap:4px}.b.lang .flag{width:16px;height:11px;border-radius:2px;flex:none;box-shadow:0 0 0 1px rgba(255,255,255,.18)}.b.lang .lq{opacity:.6;margin-left:-2px}.lotb{background:#3a2a10;color:var(--orange)}
 .seg{border-color:var(--line);border-radius:4px}.seg button.on,.seg a.on{background:var(--neon);color:#0b0820}
 a.panel.banner{border-color:#8a6a20;background:linear-gradient(90deg,rgba(255,225,77,.12),var(--card))}
 a.panel.banner.ship{border-color:#8a2a6a;background:linear-gradient(90deg,rgba(255,61,203,.16),var(--card))}
@@ -550,6 +550,30 @@ function normCond(v){
 const condB = c => c ? `<span class="b ${CONDS.includes(c) ? 'c-'+c : 'c-x'}" title="${esc(COND_LBL[c] || c)}">${esc(c)}</span>` : '';
 const LANGS = ['IT','EN-EU','EN-US','EN','DE','FR','ES','PT','JP','KR','CN'];
 const LANG_LBL = {IT: 'Italiano', 'EN-EU': 'Inglese europeo', 'EN-US': 'Inglese americano', EN: 'Inglese (non specificato)', DE: 'Tedesco', FR: 'Francese', ES: 'Spagnolo', PT: 'Portoghese', JP: 'Giapponese', KR: 'Coreano', CN: 'Cinese'};
+/** bandierine SVG per lingua (gli emoji bandiera non si vedono su Windows) */
+const FLAG_SVG = (() => {
+  const v = (a, b, c) => `<rect width="7" height="14" fill="${a}"/><rect x="7" width="6" height="14" fill="${b}"/><rect x="13" width="7" height="14" fill="${c}"/>`;
+  let us = '<rect width="20" height="14" fill="#fff"/>';
+  for (let i = 0; i < 7; i += 2) us += `<rect y="${i * 2}" width="20" height="2" fill="#b22234"/>`;
+  us += '<rect width="9" height="8" fill="#3c3b6e"/>';
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) us += `<circle cx="${1.3 + c * 2.1}" cy="${1.4 + r * 2.6}" r=".55" fill="#fff"/>`;
+  return {
+    IT: v('#009246', '#fff', '#ce2b37'), FR: v('#0055a4', '#fff', '#ef4135'),
+    DE: '<rect width="20" height="14" fill="#ffce00"/><rect width="20" height="9.33" fill="#dd0000"/><rect width="20" height="4.67" fill="#000"/>',
+    ES: '<rect width="20" height="14" fill="#aa151b"/><rect y="3.5" width="20" height="7" fill="#f1bf00"/>',
+    PT: '<rect width="20" height="14" fill="#da291c"/><rect width="8" height="14" fill="#046a38"/><circle cx="8" cy="7" r="2.6" fill="#ffe900"/>',
+    JP: '<rect width="20" height="14" fill="#fff"/><circle cx="10" cy="7" r="4" fill="#bc002d"/>',
+    KR: '<rect width="20" height="14" fill="#fff"/><path d="M6.5 7a3.5 3.5 0 0 1 7 0z" fill="#cd2e3a"/><path d="M6.5 7a3.5 3.5 0 0 0 7 0z" fill="#0047a0"/>',
+    CN: '<rect width="20" height="14" fill="#de2910"/><path d="M4 2l.9 2.6H7.6L5.4 6.2l.8 2.6L4 7.2 1.8 8.8l.8-2.6L.4 4.6h2.7z" fill="#ffde00"/>',
+    'EN-US': us,
+    'EN-EU': '<rect width="20" height="14" fill="#012169"/><path d="M0 0L20 14M20 0L0 14" stroke="#fff" stroke-width="2.8"/><path d="M0 0L20 14M20 0L0 14" stroke="#c8102e" stroke-width="1"/><path d="M10 0v14M0 7h20" stroke="#fff" stroke-width="4.2"/><path d="M10 0v14M0 7h20" stroke="#c8102e" stroke-width="2.4"/>',
+  };
+})();
+const LANG_SHORT = {'EN-US': 'EN', 'EN-EU': 'EN'};
+/** etichetta lingua con bandierina: EN-US bandiera USA, EN-EU bandiera UK, EN senza bandiera (non specificato) */
+const langB = l => { if (!l) return ''; const k = String(l).toUpperCase(), f = FLAG_SVG[k];
+  return `<span class="b lang" title="${esc(LANG_LBL[k] || l)}">${f ? `<svg class="flag" viewBox="0 0 20 14" aria-hidden="true">${f}</svg>` : ''}${esc(LANG_SHORT[k] || l)}${!f && k === 'EN' ? '<span class="lq">?</span>' : ''}</span>`; };
+const availLangs = id => [...new Set(copiesOf(id).filter(x => x.status !== 'venduto').map(x => x.language).filter(Boolean))];
 const langOpts = sel => LANGS.map(l => opt(l, sel, `${l} – ${LANG_LBL[l]}`)).join('');
 const RARITIES = {
   'Yu-Gi-Oh!': ['Common','Rare','Super Rare','Ultra Rare','Secret Rare','Ultimate Rare','Ghost Rare','Starlight Rare','Collector\'s Rare','Quarter Century Secret Rare','Prismatic Secret Rare','Platinum Secret Rare','Gold Rare','Premium Gold Rare','Short Print'],
@@ -1395,7 +1419,7 @@ async function cmImportFlow(aoa, fname){
     const st = rows.map(x => ({x, s: kind === 'sell' && x.p ? cmFindStock(x, taken) : null}));
     $('#cmt').innerHTML = `<thead><tr><th>Carta</th><th>Espansione</th><th>Rarità</th><th>Q.tà</th><th></th><th class="right">Prezzo</th>${SHOW_MKT ? '<th class="right">Mercato</th>' : ''}${kind === 'sell' ? '<th>In magazzino</th>' : ''}</tr></thead><tbody>
       ${st.map(({x, s}) => `<tr><td>${x.p ? esc(x.name) : `<span class="neg">codice ${x.id} non trovato</span>`}</td><td class="small muted">${esc(x.expansion || '')}</td><td class="small">${esc(x.rarity || '')}</td><td>${x.qty}</td>
-        <td>${condB(x.condition)} ${x.language ? `<span class="b lang">${esc(x.language)}</span>` : ''}</td><td class="right">${eur(x.unit)}</td>${SHOW_MKT ? `<td class="right">${x.p ? eur(mktPrice(x.p)) : ''}</td>` : ''}
+        <td>${condB(x.condition)} ${x.language ? `${langB(x.language)}` : ''}</td><td class="right">${eur(x.unit)}</td>${SHOW_MKT ? `<td class="right">${x.p ? eur(mktPrice(x.p)) : ''}</td>` : ''}
         ${kind === 'sell' ? `<td>${!s ? '' : s.missing ? `<span class="neg">${s.missing === x.qty ? 'non trovata' : 'mancano ' + s.missing}</span>` : '<span class="b st-d">ok</span>'}</td>` : ''}</tr>`).join('')}</tbody>`;
     const miss = kind === 'sell' ? sum(st, ({x, s}) => s ? s.missing : x.qty) : 0;
     if (kind === 'buy'){
@@ -1522,7 +1546,7 @@ function openCart(){
     return `<div class="cart">${items.map(({r, q}) => `<div class="citem" data-ci="${esc(r.card_id)}">
         <div class="cthumb cimg">${bigImgHtml({id: r.card_id, game: r.game, name: r.name, rarity: r.rarity, image_url: (r.image_url || '').replace(/#m$/, '')})}</div>
         <div class="cinfo"><div class="n">${nameHtml(r.name)}</div><div class="small muted">${esc(r.expansion || '')}</div>
-          <div class="vb">${rarB(r.rarity)} ${(r.conditions || '').split(',').filter(Boolean).map(condB).join(' ')} ${(r.languages || '').split(',').filter(Boolean).map(l => `<span class="b lang">${esc(l)}</span>`).join(' ')}</div></div>
+          <div class="vb">${rarB(r.rarity)} ${(r.conditions || '').split(',').filter(Boolean).map(condB).join(' ')} ${(r.languages || '').split(',').filter(Boolean).map(l => `${langB(l)}`).join(' ')}</div></div>
         <div class="cqty"><div class="stepper"><button type="button" data-dq="-1" ${q <= 1 ? 'disabled' : ''} aria-label="Una in meno">−</button><b>${q}</b><button type="button" data-dq="1" ${q >= Number(r.qty) ? 'disabled' : ''} aria-label="Una in più">+</button></div>
           <div class="small muted">di ${r.qty} disponibili</div></div>
         <button type="button" class="btn sm dan cdel" data-rm title="Togli dal carrello">✕ Togli</button></div>`).join('')}
@@ -1605,7 +1629,7 @@ function renderGuest(){
     <div id="glist">${G.err ? `<div class="panel empty">${esc(G.err)}</div>` : G.loading && !G.rows ? '<div class="vskel">' + '<i></i>'.repeat(12) + '</div>' : ''}</div>
   </main>`;
   const card = r => ({id: r.card_id, game: r.game, name: r.name, rarity: r.rarity, image_url: (r.image_url || '').replace(/#m$/, '')});
-  const badges = r => `${(r.conditions || '').split(',').filter(Boolean).map(condB).join(' ')} ${(r.languages || '').split(',').filter(Boolean).map(l => `<span class="b lang">${esc(l)}</span>`).join(' ')}`;
+  const badges = r => `${(r.conditions || '').split(',').filter(Boolean).map(condB).join(' ')} ${(r.languages || '').split(',').filter(Boolean).map(l => `${langB(l)}`).join(' ')}`;
   const wantCtl = (r, big) => { const q = G.want.get(r.card_id);
     return q ? `<button class="btn ${big ? '' : 'sm'} pri vwant" data-cart="1">✓ Nel carrello${q > 1 ? ' · ' + q : ''}</button>` : `<button class="btn ${big ? '' : 'sm'} vwant" data-want="${esc(r.card_id)}">Aggiungi al carrello</button>`; };
   let shown = 120, list = [];
@@ -1638,7 +1662,7 @@ function renderGuest(){
     openModal(r.name, `<div class="vdetail"><div class="cimg ${FOIL_RE.test(r.rarity || '') ? 'foil' : ''}">${bigImgHtml(card(r))}</div>
       <div><dl class="vdl"><dt>Gioco</dt><dd>${esc(r.game)}</dd><dt>Espansione</dt><dd>${esc(r.expansion || '—')}</dd><dt>Rarità</dt><dd>${rarB(r.rarity, '—')}</dd>
         <dt>Disponibili</dt><dd><b>${r.qty}</b> ${r.qty === 1 ? 'copia' : 'copie'}</dd><dt>Condizione</dt><dd>${(r.conditions || '').split(',').filter(Boolean).map(c => `${condB(c)} <span class="small muted">${esc(COND_LBL[c] || '')}</span>`).join('<br>') || '—'}</dd>
-        <dt>Lingua</dt><dd>${(r.languages || '').split(',').filter(Boolean).map(l => `<span class="b lang">${esc(l)}</span>`).join(' ') || '—'}</dd>${showLoc && r.locations ? `<dt>Posizione</dt><dd>${locB(r.locations)}</dd>` : ''}</dl>
+        <dt>Lingua</dt><dd>${(r.languages || '').split(',').filter(Boolean).map(l => `${langB(l)}`).join(' ') || '—'}</dd>${showLoc && r.locations ? `<dt>Posizione</dt><dd>${locB(r.locations)}</dd>` : ''}</dl>
         <div class="vw" data-wc="${esc(r.card_id)}" style="margin-top:16px">${wantCtl(r, true)}</div></div></div>`, {wide: true, onMount: m => {
       m.addEventListener('click', e => { const b = e.target.closest('[data-want]'); if (b){ toggle(b.dataset.want); $('[data-wc]', m).innerHTML = wantCtl(r, true); return; } if (e.target.closest('[data-cart]')) openCart(); });
     }});
@@ -1827,7 +1851,7 @@ const FOIL_RE = /secret|ultra|ultimate|starlight|ghost|collector|quarter|platinu
 const gcardHtml = (c, {qty = null, sub = '', check = false} = {}) => `<a class="gcard ${FOIL_RE.test(c.rarity || '') ? 'foil' : ''} ${check && SEL.has(c.id) ? 'sel' : ''} ${PV.on && PV.changes.has(c.id) ? 'pvnew' : ''}" href="#/c/${c.id}" data-cimg="${c.id}">
   <div class="cimg"><div class="imgslot" style="width:100%;height:100%;display:grid;place-items:center">${bigImgHtml(c)}</div></div>
   ${qty != null ? `<span class="qty">×${qty}</span>` : ''}${check ? `<input type="checkbox" class="gck" data-ck="${c.id}" ${SEL.has(c.id) ? 'checked' : ''} title="Seleziona">` : ''}
-  <div class="n" title="${esc(c.name)}">${nameHtml(c.name)}</div><div class="m">${sub}</div>${c.rarity ? `<div class="vb">${rarB(c.rarity)}</div>` : ''}</a>`;
+  <div class="n" title="${esc(c.name)}">${nameHtml(c.name)}</div><div class="m">${sub}</div>${(() => { const ls = availLangs(c.id); return c.rarity || ls.length ? `<div class="vb">${c.rarity ? rarB(c.rarity) : ''} ${ls.map(langB).join(' ')}</div>` : ''; })()}</a>`;
 function recentCards(n){
   const seen = new Set(), out = [];
   const av = [...S.copies.values()].filter(x => x.status !== 'venduto').sort((a, b) => (b.created_at || b.buy_date || '').localeCompare(a.created_at || a.buy_date || ''));
@@ -1899,7 +1923,7 @@ function cardRowsTable(cards, {showGame = false, showExp = true} = {}){
   queueImages(cards.slice(0, 150).map(x => x.c.id));
   return `<div class="tw"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th>${showExp ? '<th class="hide-m">Espansione</th>' : ''}<th>Rarità</th>${showGame ? '<th class="hide-m">Gioco</th>' : ''}<th class="hide-m">Condizioni</th><th class="right">Disp.</th><th class="right">Vend.</th><th class="right hide-m">Acq. medio</th><th class="right hide-m">Vend. medio</th>${SHOW_MKT ? '<th class="right">Mercato</th>' : ''}</tr></thead><tbody>
   ${cards.map(({c, st}) => `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${nameHtml(c.name)}</a></td>${showExp ? `<td class="hide-m muted">${esc(c.expansion || '—')}</td>` : ''}<td>${rarB(c.rarity)}</td>
-    ${showGame ? `<td class="hide-m">${esc(c.game)}</td>` : ''}<td class="hide-m">${st.conds.map(condB).join(' ')}</td><td class="right"><b>${st.avail}</b></td><td class="right">${st.sold}</td>
+    ${showGame ? `<td class="hide-m">${esc(c.game)}</td>` : ''}<td class="hide-m">${st.conds.map(condB).join(' ')} ${availLangs(c.id).map(langB).join(' ')}</td><td class="right"><b>${st.avail}</b></td><td class="right">${st.sold}</td>
     <td class="right hide-m">${eur(st.avgBuy)}</td><td class="right hide-m">${eur(st.avgSell)}</td>${SHOW_MKT ? `<td class="right nowrap">${mktCell(c)}</td>` : ''}</tr>`).join('')}
   </tbody></table></div>`;
 }
@@ -2051,7 +2075,7 @@ function drawColl(){
     ${th('name', 'Carta')}${th('exp', 'Espansione', 'hide-m')}${th('rar', 'Rarità')}${F.game ? '' : th('game', 'Gioco', 'hide-m')}<th class="hide-m">Condizioni</th>
     ${th('avail', 'Disp.', 'right')}${th('sold', 'Vend.', 'right')}${th('buy', 'Acq. medio', 'right hide-m')}${th('sell', 'Vend. medio', 'right hide-m')}${SHOW_MKT ? th('mkt', 'Mercato', 'right hide-m') : ''}${th('ask', 'In vendita a', 'right')}</tr></thead><tbody>
     ${slice.map(({c, st, ask, askN}) => `<tr class="${SEL.has(c.id) ? 'sel' : ''}"><td class="ck"><input type="checkbox" data-ck="${c.id}" ${SEL.has(c.id) ? 'checked' : ''}></td><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${nameHtml(c.name)}</a></td><td class="hide-m muted">${esc(c.expansion || '—')}</td><td>${rarB(c.rarity)}</td>
-      ${F.game ? '' : `<td class="hide-m nowrap">${esc(c.game)}</td>`}<td class="hide-m">${st.conds.map(condB).join(' ')}</td><td class="right"><b>${st.avail}</b></td><td class="right">${st.sold}</td>
+      ${F.game ? '' : `<td class="hide-m nowrap">${esc(c.game)}</td>`}<td class="hide-m">${st.conds.map(condB).join(' ')} ${availLangs(c.id).map(langB).join(' ')}</td><td class="right"><b>${st.avail}</b></td><td class="right">${st.sold}</td>
       <td class="right hide-m">${eur(st.avgBuy)}</td><td class="right hide-m">${eur(st.avgSell)}</td>${SHOW_MKT ? `<td class="right nowrap hide-m">${mktCell(c)}</td>` : ''}
       <td class="right nowrap">${ask != null ? `${askN > 1 ? '<span class="small muted">da</span> ' : ''}<b>${eur(ask)}</b>` : '<span class="muted">—</span>'}</td></tr>`).join('')}
     </tbody></table></div>
@@ -2097,7 +2121,7 @@ function pageCard(app, id){
     {name: 'Vendita (unitario)', color: '#3dff9a', pts: so.filter(x => x.sell_date && x.sell_price != null).map(x => ({x: dpt(x.sell_date), y: unitSell(x), n: x.qty}))}
   ]);
   const lotLink = x => { const l = S.lots.get(x.lot_id); return l ? `<a class="b lotb" href="#/lotto/${l.id}" title="${esc(l.description)}">Lotto: ${esc(l.description.slice(0, 22))}${l.description.length > 22 ? '…' : ''}</a>` : '<span class="b lotb">Lotto</span>'; };
-  const attrs = x => `${condB(x.condition)} ${x.language ? `<span class="b lang">${esc(x.language)}</span>` : ''} ${x.edition ? `<span class="small muted">${esc(x.edition)}</span>` : ''}`;
+  const attrs = x => `${condB(x.condition)} ${x.language ? `${langB(x.language)}` : ''} ${x.edition ? `<span class="small muted">${esc(x.edition)}</span>` : ''}`;
   app.innerHTML = `
     <div class="crumbs"><a href="#/">Home</a> › <a href="#/g/${enc(c.game)}">${esc(c.game)}</a> › <a href="#/g/${enc(c.game)}/${enc(c.expansion)}">${esc(c.expansion || '(senza espansione)')}</a> › <b>${esc(c.name)}</b></div>
     <div class="pagehead"><div class="grow"><h1>${nameHtml(c.name)}</h1><div class="muted">${esc(c.expansion || '—')} ${rarB(c.rarity)}</div></div>
@@ -2448,7 +2472,7 @@ function orderForm(pre = {}){
       $('#orows', m).innerHTML = rows.length ? rows.map((r, i) => {
         const x = S.copies.get(r.id), c = S.cards.get(x.card_id), est = x.ask_price ?? estCopy(c, x);
         return `<div class="orow" data-i="${i}">${thumbHtml(c)}<div class="grow" style="min-width:0"><b>${nameHtml(c.name)}</b>
-          <div class="small muted">${esc(c.expansion || '—')}${c.rarity ? ' · ' + esc(c.rarity) : ''} ${condB(x.condition)} ${x.language ? `<span class="b lang">${esc(x.language)}</span>` : ''} ${locB(x.location)} · ${x.lot_id ? 'da lotto' : 'pagata ' + eur(x.buy_price) + ' cad.'}${est != null ? ` · ${x.ask_price != null ? 'in vendita a' : mktUnit(c, x) != null ? 'mercato' : 'di solito la vendi a'} ${eur(est)}` : ''}</div></div>
+          <div class="small muted">${esc(c.expansion || '—')}${c.rarity ? ' · ' + esc(c.rarity) : ''} ${condB(x.condition)} ${x.language ? `${langB(x.language)}` : ''} ${locB(x.location)} · ${x.lot_id ? 'da lotto' : 'pagata ' + eur(x.buy_price) + ' cad.'}${est != null ? ` · ${x.ask_price != null ? 'in vendita a' : mktUnit(c, x) != null ? 'mercato' : 'di solito la vendi a'} ${eur(est)}` : ''}</div></div>
           <div class="oq"><label class="f">Q.tà <span style="font-weight:400">/ ${x.qty}</span></label><input class="inp" type="number" min="1" max="${x.qty}" value="${r.qty}" data-q></div>
           <div class="op"><label class="f">Prezzo €</label><input class="inp" inputmode="decimal" value="${esc(r.price)}" data-p placeholder="${est != null ? fmtIn(est * r.qty) : '0,00'}"></div>
           <button type="button" class="x" data-rm title="Togli dall'ordine">×</button></div>`;
@@ -2523,7 +2547,7 @@ const shipB = o => o.ship_status && SHIP[o.ship_status] ? `<span class="b ${SHIP
 const toShip = () => S.noShip || S.noOrders ? [] : [...S.orders.values()].filter(o => o.ship_status === 'da_spedire').sort((a, b) => (a.sell_date || '').localeCompare(b.sell_date || ''));
 const shipOpts = v => Object.entries(SHIP).map(([k, [l]]) => opt(k, v, l)).join('');
 /** elenco carte di un ordine con la posizione, per preparare il pacco */
-const pickList = id => orderItems(id).map(x => { const c = S.cards.get(x.card_id); return c ? `<div class="pick">${x.qty}× <b>${nameHtml(c.name)}</b> <span class="muted">${esc(c.expansion || '')}</span> ${condB(x.condition)} ${x.language ? `<span class="b lang">${esc(x.language)}</span>` : ''} ${locB(x.location)}</div>` : ''; }).join('');
+const pickList = id => orderItems(id).map(x => { const c = S.cards.get(x.card_id); return c ? `<div class="pick">${x.qty}× <b>${nameHtml(c.name)}</b> <span class="muted">${esc(c.expansion || '')}</span> ${condB(x.condition)} ${x.language ? `${langB(x.language)}` : ''} ${locB(x.location)}</div>` : ''; }).join('');
 function shipForm(id){
   const o = S.orders.get(id); if (!o) return;
   if (S.noShip){ upgradeModal(); return; }
@@ -3090,7 +3114,7 @@ function pageStale(app){
     </div>
     ${list.length ? `<div class="tw" style="margin-top:14px"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th class="hide-m">Espansione</th><th></th><th>Q.tà</th><th class="hide-m">Acquistata</th><th>Ferma da</th><th class="right">Costo</th><th class="right">Stima</th><th class="right">In vendita a</th><th></th></tr></thead><tbody>
       ${list.slice(0, 300).map(({c, card, days, est, cost}) => `<tr><td class="tc">${thumbHtml(card)}</td><td><a class="cname" href="#/c/${card.id}">${nameHtml(card.name)}</a>${card.rarity ? `<div class="small muted">${esc(card.rarity)}</div>` : ''}</td><td class="hide-m muted">${esc(card.expansion || '—')}</td>
-        <td>${condB(c.condition)} ${c.language ? `<span class="b lang">${esc(c.language)}</span>` : ''}</td><td>${c.qty}</td><td class="hide-m nowrap">${fdate(c.buy_date)}</td>
+        <td>${condB(c.condition)} ${c.language ? `${langB(c.language)}` : ''}</td><td>${c.qty}</td><td class="hide-m nowrap">${fdate(c.buy_date)}</td>
         <td class="nowrap"><span class="b ${days >= 365 ? 'c-PL' : days >= 180 ? 'c-LP' : 'c-x'}">${ageTxt(days)}</span></td>
         <td class="right">${c.lot_id ? `<a class="b lotb" href="#/lotto/${c.lot_id}">lotto</a>` : eur(cost)}</td><td class="right">${est != null ? eur(est) : '<span class="muted">—</span>'}</td>
         <td class="right nowrap"><a href="#" data-act="ask" data-id="${c.id}" class="askl">${askCell(c)}</a></td>
