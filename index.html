@@ -1051,8 +1051,10 @@ function needsImg(c){
   if (ex && !imgHasExact(u, ex)) return true;
   return S.mode === 'supabase' && /^https:\/\/images\.ygoprodeck\.com/.test(u);
 }
-function queueImages(ids){
-  if (PV.on || localStorage.getItem('cardarchive.autoimg') === 'off') return;
+/** ricerca automatica delle immagini: spenta finché non la accendi tu dalla pagina Dati */
+const AUTOIMG_KEY = 'cardarchive.autoimg2';
+function queueImages(ids, force = false){
+  if (PV.on || (!force && localStorage.getItem(AUTOIMG_KEY) !== 'on')) return;
   ids.forEach(id => { const c = S.cards.get(id); const k = id + '|' + (exactImageUrl(c) || ''); if (!imgTried.has(k) && needsImg(c)){ imgTried.add(k); imgQ.push(id); } });
   runImgQ();
 }
@@ -3395,7 +3397,7 @@ function pageData(app){
         <div class="panel"><h2>Prezzi Cardmarket</h2><p class="muted small" style="margin-top:-4px">Il listino viene aggiornato ogni notte da un'automazione sul tuo GitHub.</p>
           <div class="small" id="cmst">${cmStatusHtml()}</div><div class="filters" style="margin-top:8px"><button class="btn sm" id="cmre">↻ Ricarica listino</button></div></div>
         <div class="panel"><h2>Immagini delle carte</h2><p class="muted small" style="margin-top:-4px">Ogni carta prende l'immagine della sua stampa esatta (espansione e versione collegate a Cardmarket). Le foto caricate da te e le immagini scelte a mano non vengono mai sostituite. Qui puoi cercarle tutte in una volta. Per One Piece e altri giochi carica una foto dalla pagina della carta.</p>
-          <div class="filters"><button class="btn pri" data-act="pvOpen">👁 Anteprima immagini e rarità mancanti</button><a class="btn" href="#/analisi">🔍 Analisi CardTrader</a><button class="btn" id="imgall">🔎 Aggiorna immagini (stampa esatta)</button><label class="small"><input type="checkbox" id="imgauto" ${localStorage.getItem('cardarchive.autoimg') === 'off' ? '' : 'checked'}> ricerca automatica</label></div><div id="imgprog" class="small muted" style="margin-top:8px"></div></div>
+          <div class="filters"><button class="btn pri" data-act="pvOpen">👁 Anteprima immagini e rarità mancanti</button><a class="btn" href="#/analisi">🔍 Analisi CardTrader</a><button class="btn" id="imgall">🔎 Aggiorna immagini (stampa esatta)</button><label class="small"><input type="checkbox" id="imgauto" ${localStorage.getItem(AUTOIMG_KEY) === 'on' ? 'checked' : ''}> ricerca automatica</label></div><div id="imgprog" class="small muted" style="margin-top:8px"></div></div>
         <div class="panel"><h2>Backup automatico</h2><p class="muted small" style="margin-top:-4px">Ogni lunedì un'automazione salva una copia cifrata di tutto l'archivio sul tuo GitHub (ultimi 6 mesi).</p>
           <a class="btn sm" href="https://github.com/${CM_REPO}/tree/backup" target="_blank" rel="noopener">Vedi i backup su GitHub ↗</a></div>
         <div class="panel"><h2>Ripristina backup</h2><label class="btn"><input type="file" id="jsf" accept=".json,.enc,.gz" hidden>Scegli file (.json o backup cifrato)</label>
@@ -3420,10 +3422,9 @@ function pageData(app){
   ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('on'); }));
   dz.addEventListener('drop', e => handle(e.dataTransfer.files[0]));
   $('#cmre').onclick = async () => { Object.values(CM_GAMES).forEach(g => { localStorage.removeItem('cardarchive.cm.' + g); delete CM.idx[g]; delete CM.loading[g]; delete CM.err[g]; }); CM.byId.clear(); $('#cmst').textContent = 'Caricamento…'; await cmAutoload(); const el = $('#cmst'); if (el) el.innerHTML = cmStatusHtml(); };
-  $('#imgauto').onchange = e => localStorage.setItem('cardarchive.autoimg', e.target.checked ? 'on' : 'off');
+  $('#imgauto').onchange = e => localStorage.setItem(AUTOIMG_KEY, e.target.checked ? 'on' : 'off');
   $('#imgall').onclick = () => {
-    localStorage.setItem('cardarchive.autoimg', 'on'); $('#imgauto').checked = true;
-    imgTried.clear(); localStorage.removeItem(NOIMG_KEY); const ids = [...S.cards.values()].filter(needsImg).map(c => c.id); queueImages(ids);
+    imgTried.clear(); localStorage.removeItem(NOIMG_KEY); const ids = [...S.cards.values()].filter(needsImg).map(c => c.id); queueImages(ids, true);
     const tot = ids.length; if (!tot){ $('#imgprog').textContent = 'Tutte le immagini sono già quelle della stampa esatta.'; return; }
     const t = setInterval(() => { const el = $('#imgprog'); if (!el){ clearInterval(t); return; }
       const left = imgQ.length; el.textContent = left ? `Ricerca in corso: ${tot - left} di ${tot}…` : `Fatto: ${[...S.cards.values()].filter(c => IMG_GAMES.includes(c.game) && c.image_url).length} carte con immagine. Quelle non trovate puoi sistemarle a mano.`;

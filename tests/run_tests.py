@@ -130,7 +130,7 @@ async def main():
             check("la carta è collegata al prodotto Cardmarket", bool(cm), cm)
             await W(1500)
             img = await ev("[...S.cards.values()].find(c => c.name.startsWith('Ash Blossom') && c.expansion === 'Maximum Crisis').image_url || ''")
-            check("immagine della stampa esatta", "ygoprodeck" in img, img)
+            check("nessuna immagine aggiunta da sola (ricerca automatica spenta)", img == "", img)
         await step("Aggiunta di una carta dai suggerimenti", add_card)
 
         async def codice_posizione():
