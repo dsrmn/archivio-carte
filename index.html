@@ -431,6 +431,23 @@ a.panel.banner:hover{border-color:var(--neon)}
 .b.r-ir{background:linear-gradient(110deg,#14a39a,#5fe3b2);color:#03291f;border-color:#a2f5d6!important}
 .b.r-sir{background:linear-gradient(110deg,#ff8ad8,#ffd75e 50%,#86f5d6);color:#1c0d33;border-color:#fff!important}
 .b.r-leader{background:linear-gradient(180deg,#e2262f,#8e0f16);color:#fff;border-color:#ff7880!important}
+
+/* carrello vetrina */
+#gcartn{color:var(--neon)}
+.cartbar .cicon{font-size:20px;margin-right:4px}
+.cart{display:flex;flex-direction:column;gap:10px}
+.citem{display:grid;grid-template-columns:64px 1fr auto auto;gap:14px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--card2)}
+.cthumb.cimg{width:64px;border-radius:4px;box-shadow:none}.cthumb .ph{padding:4px}.cthumb .ph b,.cthumb .ph small{display:none}.cthumb .gicon{width:30px;height:30px;font-size:10px}
+.cinfo{min-width:0}.cinfo .n{font-family:var(--disp);font-weight:700;font-size:15px;line-height:1.2}
+.cqty{text-align:center}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:var(--inp)}
+.stepper button{width:34px;height:34px;border:0;background:transparent;color:var(--text);font-size:18px;cursor:pointer;font-family:var(--disp)}
+.stepper button:hover:not(:disabled){background:var(--hover);color:var(--blue)}.stepper button:disabled{opacity:.3;cursor:default}
+.stepper b{min-width:34px;text-align:center;font-family:var(--disp);font-size:16px}
+.ctot{display:flex;gap:12px;align-items:center;padding:12px 4px 2px;border-top:1px solid var(--line);margin-top:4px}.ctot b{font-family:var(--disp);font-size:16px;flex:1}
+.cform{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.cerr{color:var(--red);margin-top:8px}
+@media (max-width:760px){.citem{grid-template-columns:52px 1fr;gap:10px}.cthumb.cimg{width:52px}.cqty{grid-column:2;text-align:left;display:flex;gap:10px;align-items:center}.cdel{grid-column:2;justify-self:start}}
 </style>
 </head>
 <body>
@@ -1426,7 +1443,8 @@ async function guestLoad(){
     if (st.error) throw st.error;
     G.rows = st.data || []; G.err = null;
     G.info = (!inf.error && Array.isArray(inf.data) && inf.data[0]) || null;
-    const ids = new Set(G.rows.map(r => r.card_id)); [...G.want.keys()].forEach(id => { if (!ids.has(id)) G.want.delete(id); });
+    if (!G.cartLoaded){ cartLoad(); G.cartLoaded = true; }
+    const ids = new Map(G.rows.map(r => [r.card_id, Number(r.qty) || 1])); [...G.want.entries()].forEach(([id, q]) => { if (!ids.has(id)) G.want.delete(id); else if (q > ids.get(id)) G.want.set(id, ids.get(id)); }); cartSave();
   } catch (e){
     G.err = /guest_stock|function|schema cache/i.test(e.message || '') ? 'La vetrina non è ancora attiva su questo archivio.' : /fetch/i.test(e.message || '') ? 'Impossibile raggiungere l\'archivio: riprova tra poco.' : e.message;
   }
@@ -1434,29 +1452,78 @@ async function guestLoad(){
 }
 const waNumber = v => { let d = String(v || '').replace(/[^\d+]/g, '').replace(/^\+/, '').replace(/^00/, ''); if (/^3\d{8,9}$/.test(d)) d = '39' + d; return d.length >= 8 ? d : ''; };
 const tgUser = v => { const u = String(v || '').trim().replace(/^https?:\/\/(t\.me|telegram\.me)\//i, '').replace(/^@/, ''); return /^[A-Za-z0-9_]{4,32}$/.test(u) ? u : ''; };
-function guestMessage(){
-  const items = [...G.want.entries()].map(([id, q]) => ({r: G.rows.find(x => x.card_id === id), q})).filter(x => x.r);
-  return `Ciao! Ho visto ${G.info?.title ? 'la vetrina “' + G.info.title + '”' : 'la tua vetrina'} e mi interessano:\n` +
+/* ===== carrello della vetrina ===== */
+const cartKey = () => 'cardarchive.cart.' + (G.token || '').slice(0, 12);
+const GNAME_KEY = 'cardarchive.guestname';
+function cartSave(){ try { localStorage.setItem(cartKey(), JSON.stringify([...G.want.entries()])); } catch { /* memoria piena o non disponibile */ } }
+function cartLoad(){ try { const a = JSON.parse(localStorage.getItem(cartKey()) || '[]'); G.want = new Map(Array.isArray(a) ? a.filter(x => Array.isArray(x) && x.length === 2) : []); } catch { G.want = new Map(); } }
+const cartItems = () => [...G.want.entries()].map(([id, q]) => ({r: (G.rows || []).find(x => x.card_id === id), q})).filter(x => x.r);
+const cartQty = () => sum([...G.want.values()], v => v);
+function guestMessage(name, note){
+  const items = cartItems();
+  return `Ciao! Sono ${name}. ${G.info?.title ? 'Dalla vetrina “' + G.info.title + '”' : 'Dalla tua vetrina'} vorrei:\n` +
     items.map(({r, q}) => `• ${q}× ${r.name}${r.expansion || r.rarity ? ' — ' + [r.expansion, r.rarity].filter(Boolean).join(' · ') : ''}`).join('\n') +
-    '\nSono ancora disponibili? Grazie!';
+    `\nTotale: ${items.length} ${items.length === 1 ? 'carta' : 'carte'}, ${cartQty()} ${cartQty() === 1 ? 'copia' : 'copie'}.` +
+    (note ? `\nNote: ${note}` : '') + '\nSono ancora disponibili? Grazie!';
 }
 async function copyText(t){ try { await navigator.clipboard.writeText(t); return true; } catch { const a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); const ok = document.execCommand('copy'); a.remove(); return ok; } }
 function drawGuestBar(){
   let bar = $('#gbar'); const n = G.want.size;
+  $('#gcartn') && ($('#gcartn').textContent = n || '');
   if (!n){ bar && bar.remove(); return; }
-  if (!bar){ bar = document.createElement('div'); bar.id = 'gbar'; bar.className = 'selbar'; document.body.appendChild(bar); }
-  const wa = waNumber(G.info?.whatsapp), tg = tgUser(G.info?.telegram), q = sum([...G.want.values()], v => v);
-  bar.innerHTML = `<div class="selin"><b>${n} ${n === 1 ? 'carta' : 'carte'} · ${q} ${q === 1 ? 'copia' : 'copie'}</b><span class="small muted hide-m">nella tua richiesta</span><div class="grow"></div>
-    ${wa ? '<button class="btn sm ok" data-g="wa">Chiedi su WhatsApp</button>' : ''}${tg ? '<button class="btn sm pri" data-g="tg">Chiedi su Telegram</button>' : ''}
-    <button class="btn sm ${wa || tg ? '' : 'pri'}" data-g="copy">Copia la richiesta</button><button class="btn sm" data-g="clear" title="Svuota">✕</button></div>`;
-  bar.onclick = async e => {
-    const b = e.target.closest('[data-g]'); if (!b) return;
-    const msg = guestMessage();
-    if (b.dataset.g === 'wa') window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
-    else if (b.dataset.g === 'tg'){ await copyText(msg); toast('Richiesta copiata: incollala nella chat che si apre'); window.open(`https://t.me/${tg}`, '_blank', 'noopener'); }
-    else if (b.dataset.g === 'copy'){ toast(await copyText(msg) ? 'Richiesta copiata: incollala dove vuoi' : 'Impossibile copiare', 'err'); }
-    else { G.want.clear(); G.onWant && G.onWant(); drawGuestBar(); }
+  if (!bar){ bar = document.createElement('div'); bar.id = 'gbar'; bar.className = 'selbar cartbar'; document.body.appendChild(bar); }
+  const q = cartQty();
+  bar.innerHTML = `<div class="selin"><span class="cicon">🛒</span><b>${n} ${n === 1 ? 'carta' : 'carte'} · ${q} ${q === 1 ? 'copia' : 'copie'}</b><span class="small muted hide-m">nel carrello</span><div class="grow"></div>
+    <button class="btn pri" data-g="open">Vai al carrello →</button></div>`;
+  bar.onclick = e => { if (e.target.closest('[data-g=open]')) openCart(); };
+}
+function cartChanged(){ cartSave(); G.onWant && G.onWant(); drawGuestBar(); }
+function openCart(){
+  const wa = waNumber(G.info?.whatsapp), tg = tgUser(G.info?.telegram);
+  const body = () => {
+    const items = cartItems();
+    if (!items.length) return `<div class="empty" style="padding:30px 10px"><b>Il carrello è vuoto.</b><div class="small muted" style="margin-top:6px">Premi “Aggiungi al carrello” sulle carte che ti interessano.</div></div>
+      <div class="mfoot"><button class="btn pri" data-c>Torna alle carte</button></div>`;
+    return `<div class="cart">${items.map(({r, q}) => `<div class="citem" data-ci="${esc(r.card_id)}">
+        <div class="cthumb cimg">${bigImgHtml({id: r.card_id, game: r.game, name: r.name, rarity: r.rarity, image_url: (r.image_url || '').replace(/#m$/, '')})}</div>
+        <div class="cinfo"><div class="n">${nameHtml(r.name)}</div><div class="small muted">${esc(r.expansion || '')}</div>
+          <div class="vb">${rarB(r.rarity)} ${(r.conditions || '').split(',').filter(Boolean).map(condB).join(' ')} ${(r.languages || '').split(',').filter(Boolean).map(l => `<span class="b lang">${esc(l)}</span>`).join(' ')}</div></div>
+        <div class="cqty"><div class="stepper"><button type="button" data-dq="-1" ${q <= 1 ? 'disabled' : ''} aria-label="Una in meno">−</button><b>${q}</b><button type="button" data-dq="1" ${q >= Number(r.qty) ? 'disabled' : ''} aria-label="Una in più">+</button></div>
+          <div class="small muted">di ${r.qty} disponibili</div></div>
+        <button type="button" class="btn sm dan cdel" data-rm title="Togli dal carrello">✕ Togli</button></div>`).join('')}
+      <div class="ctot"><span>Totale</span><b>${items.length} ${items.length === 1 ? 'carta' : 'carte'} · ${cartQty()} ${cartQty() === 1 ? 'copia' : 'copie'}</b><button type="button" class="btn sm" data-clear>Svuota carrello</button></div></div>
+      <form id="cform" class="cform" novalidate>
+        <div class="fg"><div class="full"><label class="f">Il tuo nome *</label><input class="inp" name="nm" required maxlength="60" autocomplete="name" placeholder="es. Marco Rossi" value="${esc(localStorage.getItem(GNAME_KEY) || '')}"></div>
+          <div class="full"><label class="f">Note <span style="font-weight:400">(facoltative)</span></label><textarea class="inp" name="note" rows="2" maxlength="300" placeholder="es. spedizione in Italia, preferisco ritiro a mano…"></textarea></div></div>
+        <div class="cerr small" id="cerr" hidden>Scrivi il tuo nome per inviare la richiesta.</div>
+        <div class="mfoot"><button type="button" class="btn" data-c>Continua a guardare</button>
+          ${wa ? '<button type="submit" class="btn ok" data-send="wa">Invia su WhatsApp</button>' : ''}${tg ? '<button type="submit" class="btn pri" data-send="tg">Invia su Telegram</button>' : ''}
+          <button type="submit" class="btn ${wa || tg ? '' : 'pri'}" data-send="copy">Copia la richiesta</button></div>
+        <div class="small muted" style="margin-top:8px">${wa || tg ? 'Si apre la chat con il messaggio già scritto: controllalo e invialo.' : 'Copia il messaggio e mandalo a chi ti ha dato il link.'}</div>
+      </form>`;
   };
+  openModal('🛒 Il tuo carrello', body(), {wide: true, onMount: m => {
+    const redraw = () => { const nm = $('[name=nm]', m)?.value, note = $('[name=note]', m)?.value; $('.mbody', m).innerHTML = body(); if (nm != null && $('[name=nm]', m)) $('[name=nm]', m).value = nm; if (note && $('[name=note]', m)) $('[name=note]', m).value = note; };
+    m.addEventListener('click', async e => {
+      if (e.target.closest('[data-c]')){ closeModal(); return; }
+      const it = e.target.closest('[data-ci]'), id = it?.dataset.ci;
+      const dq = e.target.closest('[data-dq]');
+      if (dq && id){ const r = G.rows.find(x => x.card_id === id); const v = Math.max(1, Math.min(Number(r?.qty) || 1, (G.want.get(id) || 1) + Number(dq.dataset.dq))); G.want.set(id, v); cartChanged(); redraw(); return; }
+      if (e.target.closest('[data-rm]') && id){ G.want.delete(id); cartChanged(); redraw(); return; }
+      if (e.target.closest('[data-clear]')){ G.want.clear(); cartChanged(); redraw(); return; }
+      const send = e.target.closest('[data-send]'); if (!send) return;
+      e.preventDefault();
+      const nm = clean($('[name=nm]', m).value), note = clean($('[name=note]', m).value);
+      if (!nm){ $('#cerr', m).hidden = false; $('[name=nm]', m).focus(); return; }
+      localStorage.setItem(GNAME_KEY, nm);
+      const msg = guestMessage(nm, note);
+      if (send.dataset.send === 'wa') window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+      else if (send.dataset.send === 'tg'){ await copyText(msg); toast('Richiesta copiata: incollala nella chat che si apre'); window.open(`https://t.me/${tg}`, '_blank', 'noopener'); }
+      else toast(await copyText(msg) ? 'Richiesta copiata: incollala dove vuoi' : 'Impossibile copiare', '');
+    });
+    m.addEventListener('input', e => { if (e.target.name === 'nm' && clean(e.target.value)) $('#cerr', m).hidden = true; });
+    m.addEventListener('submit', e => e.preventDefault());
+  }});
 }
 const GV_KEY = 'cardarchive.gview';
 function renderGuest(){
@@ -1471,7 +1538,7 @@ function renderGuest(){
   <header class="top"><div class="top-in">
     <span class="logo"><i>D</i>DSR&nbsp;<span>Archive</span></span>
     <div class="grow"></div>
-    <div class="top-actions"><span class="vbadge">Vetrina</span><button class="tbtn" id="grl" title="Aggiorna">↻</button></div>
+    <div class="top-actions"><span class="vbadge">Vetrina</span><button class="tbtn" id="gcart" title="Carrello">🛒 <b id="gcartn">${G.want.size || ''}</b></button><button class="tbtn" id="grl" title="Aggiorna">↻</button></div>
   </div></header>
   <main id="app" class="vetrina">
     <section class="vhero">
@@ -1492,8 +1559,8 @@ function renderGuest(){
   </main>`;
   const card = r => ({id: r.card_id, game: r.game, name: r.name, rarity: r.rarity, image_url: (r.image_url || '').replace(/#m$/, '')});
   const badges = r => `${(r.conditions || '').split(',').filter(Boolean).map(condB).join(' ')} ${(r.languages || '').split(',').filter(Boolean).map(l => `<span class="b lang">${esc(l)}</span>`).join(' ')}`;
-  const wantCtl = (r, big) => { const q = G.want.get(r.card_id), max = Math.min(Number(r.qty) || 1, 20);
-    return `<button class="btn ${big ? '' : 'sm'} ${q ? 'pri' : ''} vwant" data-want="${esc(r.card_id)}">${q ? '✓ Nella richiesta' : 'La voglio'}</button>${q && max > 1 ? `<select class="inp wq" data-wq="${esc(r.card_id)}" title="Quante copie">${Array.from({length: max}, (_, i) => opt(i + 1, q, (i + 1) + '×')).join('')}</select>` : ''}`; };
+  const wantCtl = (r, big) => { const q = G.want.get(r.card_id);
+    return q ? `<button class="btn ${big ? '' : 'sm'} pri vwant" data-cart="1">✓ Nel carrello${q > 1 ? ' · ' + q : ''}</button>` : `<button class="btn ${big ? '' : 'sm'} vwant" data-want="${esc(r.card_id)}">Aggiungi al carrello</button>`; };
   let shown = 120, list = [];
   const draw = () => {
     if (G.err || !G.rows) return;
@@ -1526,25 +1593,25 @@ function renderGuest(){
         <dt>Disponibili</dt><dd><b>${r.qty}</b> ${r.qty === 1 ? 'copia' : 'copie'}</dd><dt>Condizione</dt><dd>${(r.conditions || '').split(',').filter(Boolean).map(c => `${condB(c)} <span class="small muted">${esc(COND_LBL[c] || '')}</span>`).join('<br>') || '—'}</dd>
         <dt>Lingua</dt><dd>${(r.languages || '').split(',').filter(Boolean).map(l => `<span class="b lang">${esc(l)}</span>`).join(' ') || '—'}</dd>${showLoc && r.locations ? `<dt>Posizione</dt><dd>${locB(r.locations)}</dd>` : ''}</dl>
         <div class="vw" data-wc="${esc(r.card_id)}" style="margin-top:16px">${wantCtl(r, true)}</div></div></div>`, {wide: true, onMount: m => {
-      m.addEventListener('click', e => { const b = e.target.closest('[data-want]'); if (b){ toggle(b.dataset.want); $('[data-wc]', m).innerHTML = wantCtl(r, true); } });
-      m.addEventListener('change', e => { const s2 = e.target.closest('[data-wq]'); if (s2){ G.want.set(s2.dataset.wq, Number(s2.value) || 1); drawGuestBar(); } });
+      m.addEventListener('click', e => { const b = e.target.closest('[data-want]'); if (b){ toggle(b.dataset.want); $('[data-wc]', m).innerHTML = wantCtl(r, true); return; } if (e.target.closest('[data-cart]')) openCart(); });
     }});
   };
   const refresh = id => { const r = rows.find(x => x.card_id === id); [...$$('#glist [data-wc]')].filter(el => el.dataset.wc === id).forEach(el => {
       if (el.classList.contains('vcard')){ el.classList.toggle('on', G.want.has(id)); $('.vw', el).innerHTML = wantCtl(r); } else { el.innerHTML = wantCtl(r); el.closest('tr')?.classList.toggle('sel', G.want.has(id)); } }); drawGuestBar(); };
-  const toggle = id => { G.want.has(id) ? G.want.delete(id) : G.want.set(id, 1); refresh(id); };
+  const toggle = id => { if (!G.want.has(id)){ G.want.set(id, 1); cartSave(); } refresh(id); };
   G.onWant = () => draw();
   let t; $('#gq') && $('#gq').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { G.q = e.target.value; shown = 120; draw(); }, 150); });
   $$('#gg [data-g]').forEach(b => b.onclick = () => { G.game = b.dataset.g; shown = 120; $$('#gg [data-g]').forEach(x => x.classList.toggle('on', x === b)); draw(); });
   $('#gsort') && ($('#gsort').onchange = e => { G.sort = e.target.value; draw(); });
   $$('#gview [data-v]').forEach(b => b.onclick = () => { G.view = b.dataset.v; localStorage.setItem(GV_KEY, G.view); $$('#gview [data-v]').forEach(x => x.classList.toggle('on', x === b)); draw(); });
   $('#grl').onclick = () => guestLoad();
+  $('#gcart').onclick = () => openCart();
   document.documentElement.style.setProperty('--hh', ($('.top')?.offsetHeight || 57) + 'px');
   $('#glist').addEventListener('click', e => {
     const b = e.target.closest('[data-want]'); if (b){ toggle(b.dataset.want); return; }
+    if (e.target.closest('[data-cart]')){ openCart(); return; }
     const o = e.target.closest('[data-open]'); if (o){ e.preventDefault(); openCard(o.dataset.open); }
   });
-  $('#glist').addEventListener('change', e => { const s2 = e.target.closest('[data-wq]'); if (!s2) return; G.want.set(s2.dataset.wq, Number(s2.value) || 1); drawGuestBar(); });
   draw(); drawGuestBar();
 }
 /* --- gestione del link dal proprietario --- */
