@@ -2681,7 +2681,7 @@ function previewModal(){
       <div class="tw"><table class="t"><thead><tr><th>Gioco</th><th class="right">Senza immagine</th><th class="right">Trovate</th><th class="right">Senza rarità</th><th class="right">Trovate</th></tr></thead><tbody>
       ${games.map(([g, x]) => `<tr><td><b>${esc(g)}</b></td><td class="right">${x.missImg}</td><td class="right pos">${x.img}</td><td class="right">${x.missRar}</td><td class="right pos">${x.rar}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Tutte le carte hanno già immagine e rarità.</td></tr>'}</tbody></table></div>
       <div class="small muted" style="margin-top:10px">Le rarità le aggiungo solo quando la stampa è sicura. Le carte giapponesi/OCG e One Piece spesso non hanno la rarità nel listino: quelle restano da completare a mano (o con CardTrader, in futuro).${stats.conflict ? ` ${stats.conflict} rarità non le aggiungo perché creerebbero un doppione.` : ''}</div>
-      <div class="small" style="margin-top:8px">Per Yu-Gi-Oh! e One Piece puoi usare anche l'<a href="#/analisi" data-close-link>analisi CardTrader</a>, che controlla tutte le carte, anche quelle con immagine.</div>
+      <div class="small" style="margin-top:8px">Puoi usare anche l'<a href="#/analisi" data-close-link>analisi CardTrader</a> (Yu-Gi-Oh!, One Piece e Pokémon), che controlla tutte le carte, anche quelle con immagine.</div>
       <div class="mfoot"><button class="btn" data-c>Chiudi</button><button class="btn pri" id="pvgo" ${stats.img + stats.rar ? '' : 'disabled'}>👁 Mostra l'anteprima</button></div>`, {wide: true, onMount: m => {
       $('[data-c]', m).onclick = closeModal; $('#pvgo', m).onclick = () => { closeModal(); previewStart(); };
       $$('[data-close-link]', m).forEach(x => x.addEventListener('click', closeModal));
@@ -2719,7 +2719,7 @@ async function ctRun(){
 function ctClassify(){
   const out = {miss_img: [], miss_rar: [], diff_rar: [], has_img: [], same: [], amb: [], none: [], noexp: []};
   for (const c of S.cards.values()){
-    if (!['Yu-Gi-Oh!', 'One Piece'].includes(c.game)) continue;
+    if (!['Yu-Gi-Oh!', 'One Piece', 'Pokémon'].includes(c.game)) continue;
     const p = CTA.rows.get(c.id); if (!p) continue;
     if (p.status === 'espansione_non_trovata'){ out.noexp.push({c, p}); continue; }
     if (p.status === 'non_trovata'){ out.none.push({c, p}); continue; }
@@ -2753,7 +2753,7 @@ function pageAnalisi(app){
   const listOf = {diff: k ? [...k.diff_rar] : [], miss_img: k?.miss_img || [], miss_rar: k?.miss_rar || [], has_img: k?.has_img || [], amb: k?.amb || [], none: [...(k?.none || []), ...(k?.noexp || [])], same: k?.same || []}[CTA.show] || [];
   app.innerHTML = `
     <div class="crumbs"><a href="#/">Home</a> › <a href="#/dati">Importa / Esporta</a> › <b>Analisi CardTrader</b></div>
-    <div class="pagehead"><div class="grow"><h1>Analisi CardTrader</h1><div class="muted">Per ogni carta Yu-Gi-Oh! e One Piece cerco la stampa su CardTrader e confronto immagine e rarità. Non modifico niente finché non confermi.</div></div>
+    <div class="pagehead"><div class="grow"><h1>Analisi CardTrader</h1><div class="muted">Per ogni carta Yu-Gi-Oh!, One Piece e Pokémon cerco la stampa su CardTrader (anche per le carte che hanno già un'immagine) e confronto immagine e rarità. Non modifico niente finché non confermi.</div></div>
       <button class="btn ${analyzed ? '' : 'pri'}" data-act="ctRun" ${CTA.running ? 'disabled' : ''}>${CTA.running ? 'Analisi in corso…' : analyzed ? '↻ Rifai l\'analisi' : '▶ Avvia l\'analisi'}</button></div>
     ${CTA.running ? `<div class="panel"><b>Analisi in corso</b> · espansioni controllate ${CTA.prog?.done || 0}${CTA.prog?.total ? ' di ' + CTA.prog.total : ''}<div class="prog" style="margin-top:8px"><i style="width:${CTA.prog?.total ? Math.round(CTA.prog.done / CTA.prog.total * 100) : 3}%"></i></div><div class="small muted" style="margin-top:6px">Può richiedere qualche minuto: puoi restare su questa pagina.</div></div>` : ''}
     ${CTA.err ? `<div class="panel empty" style="color:var(--red)">${esc(CTA.err)}</div>` : ''}
