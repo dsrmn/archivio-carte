@@ -255,7 +255,9 @@ async def main():
         async def vendita():
             ash = await ev("[...S.copies.values()].find(c => c.status !== 'venduto' && S.cards.get(c.card_id).name.startsWith('Ash Blossom') && c.buy_price === 8).id")
             await ev(f"orderForm({{items: ['{ash}']}})"); await W(400)
-            await page.fill("input[name=platform]", "cardmarket")   # minuscolo: la commissione deve funzionare lo stesso
+            opts = await page.eval_on_selector_all("select[name=platform] option", "os => os.map(o => o.value)")
+            check("Piattaforme nel menu: Vinted e IRL", "Vinted" in opts and "IRL" in opts, opts)
+            await page.select_option("select[name=platform]", "Cardmarket")
             await page.fill("#orows [data-p]", "20"); await W(200)
             check("commissione 5% calcolata anche con 'cardmarket' minuscolo", (await page.input_value("input[name=fee]")) == "1,00", await page.input_value("input[name=fee]"))
             await page.fill("input[name=sc]", "1,20"); await page.fill("input[name=sk]", "1,50"); await W(150)

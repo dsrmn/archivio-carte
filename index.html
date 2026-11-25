@@ -581,7 +581,9 @@ const RARITIES = {
   'One Piece': ['C','UC','R','SR','SEC','L','SP','TR','P']
 };
 const EDITIONS = ['1st Edition','Unlimited','Limited Edition','Reprint'];
-const PLATFORMS = ['Cardmarket','CardTrader','eBay','Vinted','Di persona','Altro'];
+const PLATFORMS = ['Cardmarket','CardTrader','Vinted','IRL','eBay','Vetrina','Altro'];
+/** menu a tendina piattaforma; un valore vecchio fuori elenco resta selezionabile */
+const platSel = (val, empty = false) => `<select class="inp" name="platform">${empty ? opt('', val || '', '—') : ''}${(val && !PLATFORMS.includes(val) ? [val, ...PLATFORMS] : PLATFORMS).map(p => opt(p, val || '', p === 'IRL' ? 'IRL (di persona)' : p)).join('')}</select>`;
 
 /* ===================== stato & backend ===================== */
 const TABLES = ['cards','lots','orders','copies'];
@@ -671,7 +673,7 @@ async function loadAll(){
 }
 
 /* ===== impostazioni (commissioni, spedizioni) ===== */
-const PLAT_DEFAULT = {Cardmarket: {pct: 5, fixed: 0}, CardTrader: {pct: 0, fixed: 0}, eBay: {pct: 0, fixed: 0}, Vinted: {pct: 0, fixed: 0}, 'Di persona': {pct: 0, fixed: 0}, Altro: {pct: 0, fixed: 0}};
+const PLAT_DEFAULT = {Cardmarket: {pct: 5, fixed: 0}, CardTrader: {pct: 0, fixed: 0}, eBay: {pct: 0, fixed: 0}, Vinted: {pct: 0, fixed: 0}, IRL: {pct: 0, fixed: 0}, Altro: {pct: 0, fixed: 0}};
 let SET = {fees: JSON.parse(JSON.stringify(PLAT_DEFAULT)), shipCost: 0, shipCharged: 0, stale: 6, langAdj: {}, enDefault: 'EN-EU'};
 function mergeSet(j){ if (!j) return; SET = {...SET, ...j, fees: {...JSON.parse(JSON.stringify(PLAT_DEFAULT)), ...(j.fees || {})}, langAdj: {...(j.langAdj || SET.langAdj || {})}}; }
 async function loadSettings(){
@@ -2397,9 +2399,9 @@ function editCopyForm(id){
     <div class="askf"><label class="f">In vendita a € (per copia)</label><input class="inp" name="ask_price" inputmode="decimal" value="${x.ask_price != null ? fmtIn(x.ask_price) : ''}" placeholder="non in vendita"></div>
     <div class="sellf"><label class="f">Data vendita</label><input class="inp" name="sell_date" type="date" value="${x.sell_date || ''}"></div>
     <div class="sellf"><label class="f">Incasso totale (€)</label><input class="inp" name="sell_price" inputmode="decimal" value="${x.sell_price ?? ''}"></div>
-    <div class="sellf"><label class="f">Piattaforma</label><input class="inp" name="platform" list="dl-pl" value="${esc(x.platform || '')}"></div>
+    <div class="sellf"><label class="f">Piattaforma</label>${platSel(x.platform || '', true)}</div>
     <div class="full"><label class="f">Note</label><input class="inp" name="notes" value="${esc(x.notes || '')}"></div>
-  </div><div class="mfoot"><button type="button" class="btn" data-c>Annulla</button><button class="btn pri">Salva</button></div>${dl('dl-ed', EDITIONS)}${dl('dl-pl', PLATFORMS)}${dl('dl-loc', allLocs())}</form>`,
+  </div><div class="mfoot"><button type="button" class="btn" data-c>Annulla</button><button class="btn pri">Salva</button></div>${dl('dl-ed', EDITIONS)}${dl('dl-loc', allLocs())}</form>`,
   {wide: true, onMount: m => {
     const f = $('#ecp', m), E = n => f.elements[n];
     $('[data-c]', m).onclick = closeModal;
@@ -2448,7 +2450,7 @@ function orderForm(pre = {}){
   openModal('Nuova vendita', `<form id="of" autocomplete="off">
     <div class="fg">
       <div><label class="f">Data</label><input class="inp" type="date" name="date" value="${today()}"></div>
-      <div><label class="f">Piattaforma</label><input class="inp" name="platform" list="dl-pl" value="${esc(pre.platform || plat0)}"></div>
+      <div><label class="f">Piattaforma</label>${platSel(pre.platform || plat0)}</div>
       <div><label class="f">Acquirente <span style="font-weight:400">(facoltativo)</span></label><input class="inp" name="buyer" placeholder="nome utente" value="${esc(pre.buyer || '')}"></div>
       ${S.noShip ? '' : `<div><label class="f">Spedizione</label><select class="inp" name="ship">${shipOpts('da_spedire')}</select></div>`}
     </div>
@@ -2462,7 +2464,7 @@ function orderForm(pre = {}){
     </div>
     <div style="margin-top:12px"><label class="f">Note</label><input class="inp" name="notes"></div>
     <div id="osum" class="osum"></div>
-    <div class="mfoot"><button type="button" class="btn" data-c>Annulla</button><button class="btn ok">Registra vendita</button></div>${dl('dl-pl', PLATFORMS)}</form>`,
+    <div class="mfoot"><button type="button" class="btn" data-c>Annulla</button><button class="btn ok">Registra vendita</button></div></form>`,
   {wide: true, onMount: m => {
     const f = $('#of', m), E = n => f.elements[n];
     let feeTouched = false;
@@ -2571,7 +2573,7 @@ function orderView(id){
   openModal(`Vendita del ${fdate(o.sell_date)}`, `<form id="ov">
     <div class="fg">
       <div><label class="f">Data</label><input class="inp" type="date" name="date" value="${o.sell_date || ''}"></div>
-      <div><label class="f">Piattaforma</label><input class="inp" name="platform" list="dl-pl" value="${esc(o.platform || '')}"></div>
+      <div><label class="f">Piattaforma</label>${platSel(o.platform || '', true)}</div>
       <div><label class="f">Acquirente</label><input class="inp" name="buyer" value="${esc(o.buyer || '')}"></div>
       <div><label class="f">Spedizione pagata dall'acquirente €</label><input class="inp" name="sc" inputmode="decimal" value="${fmtIn(o.shipping_charged)}"></div>
       <div><label class="f">Costo spedizione + imballaggio €</label><input class="inp" name="sk" inputmode="decimal" value="${fmtIn(o.shipping_cost)}"></div>
@@ -2588,7 +2590,7 @@ function orderView(id){
     </tbody></table></div>
     <div class="osum"><div class="osum-g"><span>Articoli</span><b>${eur(k.gross)}</b><span>+ spedizione pagata</span><b>${eur(o.shipping_charged)}</b><span>− commissione</span><b>${eur(o.fee)}</b><span>− spedizione e imballaggio</span><b>${eur(o.shipping_cost)}</b><span class="tot">Ti è rimasto</span><b class="tot">${eur(k.net)}</b></div>
       ${mg != null ? `<div class="small muted" style="margin-top:8px">Margine netto sulle carte singole: ${signEur(mg)}${k.hasLot ? ' · le carte da lotto contano sul lotto' : ''}</div>` : ''}</div>
-    <div class="mfoot"><button type="button" class="btn dan" id="ocancel" style="margin-right:auto">Annulla vendita</button><button type="button" class="btn" data-c>Chiudi</button><button class="btn pri">Salva</button></div>${dl('dl-pl', PLATFORMS)}</form>`,
+    <div class="mfoot"><button type="button" class="btn dan" id="ocancel" style="margin-right:auto">Annulla vendita</button><button type="button" class="btn" data-c>Chiudi</button><button class="btn pri">Salva</button></div></form>`,
   {wide: true, onMount: m => {
     const f = $('#ov', m), E = n => f.elements[n];
     $('[data-c]', m).onclick = closeModal;
