@@ -326,6 +326,7 @@ a.panel.banner:hover{border-color:var(--neon)}
 .gcard .cimg .ph b{font-size:13px}.gcard .cimg .ph{padding:8px}
 .gcard .n{font-weight:600;font-size:13.5px;margin-top:8px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gcard .m{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gcard .vb{display:flex;margin-top:4px}.gcard .vb .b{max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .gcard .qty{position:absolute;top:6px;right:6px;background:rgba(11,8,32,.85);color:#fff;font-family:var(--disp);font-weight:700;font-size:12px;padding:1px 7px;border-radius:3px;border:1px solid var(--line)}
 .gcard .gck{position:absolute;top:6px;left:6px;width:20px;height:20px;accent-color:var(--neon)}
 .gcard.sel .cimg{box-shadow:0 0 0 3px var(--neon)}
@@ -404,6 +405,32 @@ a.panel.banner:hover{border-color:var(--neon)}
   .vdetail{grid-template-columns:1fr}.vdetail .cimg{max-width:240px;margin:0 auto}
 }
 @media (prefers-reduced-motion:reduce){.vskel i{animation:none}.vcard{transition:none}}
+/* etichette rarità */
+.b.rar{border:1px solid transparent;font-family:var(--disp);font-weight:700;letter-spacing:.2px;padding:1px 7px}
+.b.var{background:#211b47;color:#a198cf;font-weight:600;font-size:11px;vertical-align:1px}
+.b.buy{background:#123a4a;color:#8eeaff}
+.b.r-x{background:#2a1d5c;color:#d9ccff}
+.b.r-common{background:#2a2550;color:#c3bde3;border-color:#3a3470!important}
+.b.r-unc{background:#173a33;color:#9fe8cc;border-color:#25594d!important}
+.b.r-rare{background:linear-gradient(180deg,#6a7194,#424866);color:#fff;border-color:#9aa3c8!important}
+.b.r-super{background:linear-gradient(180deg,#2f6bff,#1a44c4);color:#fff;border-color:#6f97ff!important}
+.b.r-ultra{background:linear-gradient(135deg,#ffe58f,#d8a21c 55%,#ffd65a);color:#2a1a00;border-color:#fff0b8!important}
+.b.r-ultimate{background:linear-gradient(180deg,#c0803f,#7a4317);color:#ffe9d1;border-color:#e0a066!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -1px 0 rgba(0,0,0,.35)}
+.b.r-gold{background:linear-gradient(135deg,#fff1a8,#c99a0e 45%,#ffe066 70%,#a87b00);color:#241700;border-color:#ffe066!important}
+.b.r-secret{background:linear-gradient(110deg,#ff8ad8,#9bb8ff 35%,#86f5d6 65%,#ffe88a);color:#1c0d33;border-color:rgba(255,255,255,.55)!important}
+.b.r-plat{background:linear-gradient(110deg,#ffffff,#b8c2e2 35%,#efe3ff 65%,#cfd8f0);color:#191b33;border-color:#ffffff!important;box-shadow:0 0 8px rgba(220,225,255,.35)}
+.b.r-qcsr{background:linear-gradient(110deg,#ffd75e,#ff8ad8 30%,#9bb8ff 60%,#ffd75e);color:#1c0d33;border-color:#ffe9a6!important;box-shadow:0 0 8px rgba(255,215,94,.4)}
+.b.r-prism{background:repeating-linear-gradient(115deg,#ff7aa5 0 7px,#ffd56b 7px 14px,#7ff2a8 14px 21px,#6fcaff 21px 28px,#c09bff 28px 35px);color:#1c0d33;border-color:#fff!important;text-shadow:0 0 3px rgba(255,255,255,.9)}
+.b.r-star{background:radial-gradient(circle at 20% 30%,#fff 0 1px,transparent 1.5px),radial-gradient(circle at 75% 65%,#fff 0 1px,transparent 1.5px),linear-gradient(110deg,#1a1050,#2b1a7a);color:#fff;border-color:#a28cff!important;box-shadow:0 0 10px rgba(162,140,255,.55)}
+.b.r-star::before{content:"✦ "}
+.b.r-ghost{background:rgba(255,255,255,.05);color:#f6f6ff;border-color:#e6e6ff!important;text-shadow:0 0 6px rgba(255,255,255,.9)}
+.b.r-coll{background:linear-gradient(110deg,#17cfc0,#4b7bff 50%,#c56bff);color:#fff;border-color:#8ff5ec!important}
+.b.r-foil{background:linear-gradient(110deg,#6a39d6,#b25bff);color:#fff;border-color:#c99bff!important}
+.b.r-holo{background:linear-gradient(110deg,#2f66f2,#62dcff);color:#06142e;border-color:#9eeaff!important}
+.b.r-double{background:linear-gradient(180deg,#e0405e,#9e1f39);color:#fff;border-color:#ff8aa0!important}
+.b.r-ir{background:linear-gradient(110deg,#14a39a,#5fe3b2);color:#03291f;border-color:#a2f5d6!important}
+.b.r-sir{background:linear-gradient(110deg,#ff8ad8,#ffd75e 50%,#86f5d6);color:#1c0d33;border-color:#fff!important}
+.b.r-leader{background:linear-gradient(180deg,#e2262f,#8e0f16);color:#fff;border-color:#ff7880!important}
 </style>
 </head>
 <body>
@@ -728,7 +755,26 @@ function askForm(ids){
   }});
 }
 function findCard(game, expansion, name, rarity){ return IX.byKey.get(keyOf({game, expansion, name, rarity})); }
+/* ===== rarità: etichette colorate e rarità scritta nel nome ===== */
+const RAR_PART_RE = /^(?:(?:duel terminal|premium|platinum|quarter century|prismatic|gold|ghost|starlight|starfoil|shatterfoil|mosaic|collector's|ultra parallel|ultimate|ultra|super|secret|special illustration|illustration|double|hyper|amazing|radiant|shiny|ace spec|holo|treasure)\s+)*(?:common|uncommon|rare|leader)$|^rare holo$/i;
+/** "Armageddon Knight (Super Rare | ©1996)" → {name: "Armageddon Knight (©1996)", rarity: "Super Rare"} */
+function splitRarity(name){
+  const m = String(name || '').match(/^(.*?)\s*\(([^()]*)\)\s*$/); if (!m || !m[1]) return {name, rarity: ''};
+  const parts = m[2].split('|').map(x => x.trim()).filter(Boolean), i = parts.findIndex(x => RAR_PART_RE.test(x));
+  if (i < 0) return {name, rarity: ''};
+  const rarity = parts.splice(i, 1)[0];
+  return {name: parts.length ? `${m[1]} (${parts.join(' | ')})` : m[1], rarity};
+}
+const RAR_TIERS = [[/quarter century/i, 'qcsr'], [/prismatic/i, 'prism'], [/platinum/i, 'plat'], [/starlight/i, 'star'], [/ghost/i, 'ghost'], [/collector/i, 'coll'],
+  [/special illustration|hyper/i, 'sir'], [/gold/i, 'gold'], [/secret/i, 'secret'], [/ultimate/i, 'ultimate'], [/illustration/i, 'ir'], [/double/i, 'double'],
+  [/ultra/i, 'ultra'], [/super/i, 'super'], [/starfoil|shatterfoil|mosaic|parallel/i, 'foil'], [/holo/i, 'holo'], [/leader/i, 'leader'], [/uncommon/i, 'unc'], [/common|short print/i, 'common'], [/rare/i, 'rare']];
+const rarTier = r => (RAR_TIERS.find(([re]) => re.test(r || '')) || [0, 'x'])[1];
+const rarB = (r, empty = '') => r ? `<span class="b rar r-${rarTier(r)}">${esc(r)}</span>` : empty;
+/** nome con le varianti tra parentesi (©1996, numero, Alternate Art…) come etichette grigie */
+const nameHtml = name => { const m = String(name || '').match(/^(.*?)\s*\(([^()]*)\)\s*$/);
+  return m && m[1] ? `${esc(m[1])} ${m[2].split('|').map(x => x.trim()).filter(Boolean).map(v => `<span class="b var">${esc(v)}</span>`).join(' ')}` : esc(name); };
 async function ensureCard(tx, d){
+  { const sp = splitRarity(d.name); if (sp.rarity && (!clean(d.rarity) || norm(sp.rarity) === norm(d.rarity))) d = {...d, name: sp.name, rarity: clean(d.rarity) || sp.rarity}; }
   const ex = S.cards.size && ([...S.cards.values()].find(c => keyOf(c) === keyOf(d)) || (d.cm_id ? [...S.cards.values()].find(c => c.game === d.game && Number(c.cm_id) === Number(d.cm_id)) : null));
   if (ex){ if (d.image_url && !ex.image_url) await tx.update('cards', ex.id, {image_url: d.image_url}); if (d.cm_id && !ex.cm_id && !S.noCmId) await tx.update('cards', ex.id, {cm_id: d.cm_id}); return ex.id; }
   const id = uid();
@@ -1213,7 +1259,7 @@ function pageLink(app){
     ${Object.keys(CM.idx).length ? '' : `<div class="note">${cmStatusHtml()}</div>`}
     <div class="panel flush"><div class="panel-h filters"><div class="seg" id="lkf"><button data-v="amb" class="${LINKF === 'amb' ? 'on' : ''}">Più versioni possibili (${amb.length})</button><button data-v="none" class="${LINKF === 'none' ? 'on' : ''}">Non trovate (${none.length})</button></div></div>
     ${list.length ? `<div class="tw"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th class="hide-m">Espansione</th><th>Rarità</th><th class="right">Disp.</th><th>${LINKF === 'amb' ? 'Versioni' : ''}</th><th></th></tr></thead><tbody>
-      ${list.slice(0, 300).map(({c, r, q}) => `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${esc(c.name)}</a></td><td class="hide-m muted">${esc(c.expansion || '—')}</td><td>${c.rarity ? `<span class="b rar">${esc(c.rarity)}</span>` : ''}</td><td class="right">${q}</td>
+      ${list.slice(0, 300).map(({c, r, q}) => `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${nameHtml(c.name)}</a></td><td class="hide-m muted">${esc(c.expansion || '—')}</td><td>${rarB(c.rarity)}</td><td class="right">${q}</td>
         <td class="small muted">${r.status === 'ambiguous' ? r.cands.length + ' versioni' : ''}</td><td class="acts"><button class="btn sm pri" data-act="cmPick" data-id="${c.id}">Scegli</button></td></tr>`).join('')}
     </tbody></table></div>` : `<div class="empty">${LINKF === 'amb' ? 'Nessuna carta con più versioni da scegliere. 👍' : 'Tutte le carte sono state trovate nel catalogo. 👍'}</div>`}</div>
     ${LINKF === 'none' && list.length ? '<div class="small muted">Spesso il nome è scritto in modo diverso (per esempio in italiano): con “Scegli” puoi cercarla e collegarla, oppure indicare che non esiste su Cardmarket.</div>' : ''}`;
@@ -1461,13 +1507,13 @@ function renderGuest(){
     $('#glist').innerHTML = (G.view === 'grid'
       ? `<div class="vgrid">${part.map(r => `<div class="vcard ${G.want.has(r.card_id) ? 'on' : ''} ${FOIL_RE.test(r.rarity || '') ? 'foil' : ''}" data-wc="${esc(r.card_id)}">
           <button class="vimg cimg" data-open="${esc(r.card_id)}" title="Vedi la carta">${bigImgHtml(card(r))}<span class="qty">×${r.qty}</span></button>
-          <div class="vinfo"><div class="n" title="${esc(r.name)}">${esc(r.name)}</div><div class="m">${esc(r.expansion || '')}</div>
-            <div class="vb">${r.rarity ? `<span class="b rar">${esc(r.rarity)}</span> ` : ''}${badges(r)}</div>${showLoc && r.locations ? `<div class="vb">${locB(r.locations)}</div>` : ''}
+          <div class="vinfo"><div class="n" title="${esc(r.name)}">${nameHtml(r.name)}</div><div class="m">${esc(r.expansion || '')}</div>
+            <div class="vb">${r.rarity ? rarB(r.rarity) + ' ' : ''}${badges(r)}</div>${showLoc && r.locations ? `<div class="vb">${locB(r.locations)}</div>` : ''}
             <div class="vw">${wantCtl(r)}</div></div></div>`).join('')}</div>`
       : `<div class="panel flush"><div class="tw"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th class="hide-m">Espansione</th><th>Rarità</th><th class="right">Copie</th><th class="hide-m">Condizione / lingua</th>${showLoc ? '<th class="hide-m">Posizione</th>' : ''}<th></th></tr></thead><tbody>
         ${part.map(r => `<tr class="${G.want.has(r.card_id) ? 'sel' : ''}"><td class="tc">${thumbHtml(card(r))}</td>
-          <td><a href="#" class="cname" data-open="${esc(r.card_id)}">${esc(r.name)}</a><div class="small muted show-m">${esc(r.expansion || '')}</div></td><td class="hide-m muted">${esc(r.expansion || '—')}</td>
-          <td>${r.rarity ? `<span class="b rar">${esc(r.rarity)}</span>` : ''}</td><td class="right"><b>${r.qty}</b></td><td class="hide-m">${badges(r)}</td>
+          <td><a href="#" class="cname" data-open="${esc(r.card_id)}">${nameHtml(r.name)}</a><div class="small muted show-m">${esc(r.expansion || '')}</div></td><td class="hide-m muted">${esc(r.expansion || '—')}</td>
+          <td>${rarB(r.rarity)}</td><td class="right"><b>${r.qty}</b></td><td class="hide-m">${badges(r)}</td>
           ${showLoc ? `<td class="hide-m">${locB(r.locations)}</td>` : ''}<td class="acts nowrap" data-wc="${esc(r.card_id)}">${wantCtl(r)}</td></tr>`).join('')}
         </tbody></table></div></div>`)
       + (list.length > shown ? `<div class="vmore"><button class="btn" id="gmore">Mostra altre ${Math.min(120, list.length - shown)} carte</button><span class="small muted">${shown} di ${list.length}</span></div>` : '');
@@ -1476,7 +1522,7 @@ function renderGuest(){
   const openCard = id => {
     const r = rows.find(x => x.card_id === id); if (!r) return;
     openModal(r.name, `<div class="vdetail"><div class="cimg ${FOIL_RE.test(r.rarity || '') ? 'foil' : ''}">${bigImgHtml(card(r))}</div>
-      <div><dl class="vdl"><dt>Gioco</dt><dd>${esc(r.game)}</dd><dt>Espansione</dt><dd>${esc(r.expansion || '—')}</dd><dt>Rarità</dt><dd>${r.rarity ? `<span class="b rar">${esc(r.rarity)}</span>` : '—'}</dd>
+      <div><dl class="vdl"><dt>Gioco</dt><dd>${esc(r.game)}</dd><dt>Espansione</dt><dd>${esc(r.expansion || '—')}</dd><dt>Rarità</dt><dd>${rarB(r.rarity, '—')}</dd>
         <dt>Disponibili</dt><dd><b>${r.qty}</b> ${r.qty === 1 ? 'copia' : 'copie'}</dd><dt>Condizione</dt><dd>${(r.conditions || '').split(',').filter(Boolean).map(c => `${condB(c)} <span class="small muted">${esc(COND_LBL[c] || '')}</span>`).join('<br>') || '—'}</dd>
         <dt>Lingua</dt><dd>${(r.languages || '').split(',').filter(Boolean).map(l => `<span class="b lang">${esc(l)}</span>`).join(' ') || '—'}</dd>${showLoc && r.locations ? `<dt>Posizione</dt><dd>${locB(r.locations)}</dd>` : ''}</dl>
         <div class="vw" data-wc="${esc(r.card_id)}" style="margin-top:16px">${wantCtl(r, true)}</div></div></div>`, {wide: true, onMount: m => {
@@ -1663,7 +1709,7 @@ const FOIL_RE = /secret|ultra|ultimate|starlight|ghost|collector|quarter|platinu
 const gcardHtml = (c, {qty = null, sub = '', check = false} = {}) => `<a class="gcard ${FOIL_RE.test(c.rarity || '') ? 'foil' : ''} ${check && SEL.has(c.id) ? 'sel' : ''}" href="#/c/${c.id}" data-cimg="${c.id}">
   <div class="cimg"><div class="imgslot" style="width:100%;height:100%;display:grid;place-items:center">${bigImgHtml(c)}</div></div>
   ${qty != null ? `<span class="qty">×${qty}</span>` : ''}${check ? `<input type="checkbox" class="gck" data-ck="${c.id}" ${SEL.has(c.id) ? 'checked' : ''} title="Seleziona">` : ''}
-  <div class="n" title="${esc(c.name)}">${esc(c.name)}</div><div class="m">${sub}</div></a>`;
+  <div class="n" title="${esc(c.name)}">${nameHtml(c.name)}</div><div class="m">${sub}</div>${c.rarity ? `<div class="vb">${rarB(c.rarity)}</div>` : ''}</a>`;
 function recentCards(n){
   const seen = new Set(), out = [];
   const av = [...S.copies.values()].filter(x => x.status !== 'venduto').sort((a, b) => (b.created_at || b.buy_date || '').localeCompare(a.created_at || a.buy_date || ''));
@@ -1685,7 +1731,7 @@ function pageHome(app){
     ${statTiles(t)}
     ${(() => { const rc = recentCards(14); if (rc.length < 3) return '';
       return `<div class="panel"><div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px"><h2 style="margin:0">Ultime aggiunte</h2><a class="small" href="#/collezione?vista=griglia">Vedi tutte in griglia</a></div>
-        <div class="shelf">${rc.map(c => { const st = cardStats(c.id); return gcardHtml(c, {qty: st.avail, sub: esc([c.expansion, c.rarity].filter(Boolean).join(' · '))}); }).join('')}</div></div>`; })()}
+        <div class="shelf">${rc.map(c => { const st = cardStats(c.id); return gcardHtml(c, {qty: st.avail, sub: esc(c.expansion || '')}); }).join('')}</div></div>`; })()}
     ${(() => { const ts = toShip(); if (!ts.length) return '';
       return `<a class="panel banner ship" href="#/vendite?stato=da_spedire"><span style="font-size:22px">📦</span><div class="grow"><b>${ts.length} ${ts.length === 1 ? 'ordine da spedire' : 'ordini da spedire'}</b><div class="small muted">${sum(ts, o => oc(o).qty)} carte · il più vecchio è del ${fdate(ts[0].sell_date)}</div></div><span class="btn sm">Prepara →</span></a>`; })()}
     ${(() => { const mo = SET.stale || 6, st = staleList(mo, ''); if (!st.length) return '';
@@ -1696,7 +1742,7 @@ function pageHome(app){
     </div></div>
     <div class="panel flush"><div class="panel-h"><h2>Attività recente</h2></div>
       ${ev.length ? `<div class="tw"><table class="t"><thead><tr><th>Data</th><th>Tipo</th><th>Carta</th><th class="hide-m">Espansione</th><th>Q.tà</th><th class="right">Prezzo</th></tr></thead><tbody>
-      ${ev.slice(0, 12).map(e => `<tr><td class="nowrap">${fdate(e.d)}</td><td>${e.kind === 'v' ? '<span class="b st-d">Vendita</span>' : '<span class="b rar">Acquisto</span>'}</td>
+      ${ev.slice(0, 12).map(e => `<tr><td class="nowrap">${fdate(e.d)}</td><td>${e.kind === 'v' ? '<span class="b st-d">Vendita</span>' : '<span class="b buy">Acquisto</span>'}</td>
         <td><a class="cname" href="#/c/${e.card.id}">${esc(e.card.name)}</a></td><td class="hide-m muted">${esc(e.card.expansion || '—')}</td><td>${e.c.qty}</td>
         <td class="right nowrap">${e.kind === 'v' ? eur(e.c.sell_price) : e.c.lot_id ? '<span class="b lotb">lotto</span>' : eur((e.c.buy_price || 0) * e.c.qty)}</td></tr>`).join('')}
       </tbody></table></div>` : `<div class="empty">Ancora nessuna carta. Inizia con <a href="#" data-act="addCard">Aggiungi carta</a> o <a href="#/dati">importa il tuo Excel</a>.</div>`}
@@ -1730,7 +1776,7 @@ function cardRowsTable(cards, {showGame = false, showExp = true} = {}){
   if (!cards.length) return `<div class="empty">Nessuna carta trovata.</div>`;
   queueImages(cards.slice(0, 150).map(x => x.c.id));
   return `<div class="tw"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th>${showExp ? '<th class="hide-m">Espansione</th>' : ''}<th>Rarità</th>${showGame ? '<th class="hide-m">Gioco</th>' : ''}<th class="hide-m">Condizioni</th><th class="right">Disp.</th><th class="right">Vend.</th><th class="right hide-m">Acq. medio</th><th class="right hide-m">Vend. medio</th>${SHOW_MKT ? '<th class="right">Mercato</th>' : ''}</tr></thead><tbody>
-  ${cards.map(({c, st}) => `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${esc(c.name)}</a></td>${showExp ? `<td class="hide-m muted">${esc(c.expansion || '—')}</td>` : ''}<td>${c.rarity ? `<span class="b rar">${esc(c.rarity)}</span>` : ''}</td>
+  ${cards.map(({c, st}) => `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${nameHtml(c.name)}</a></td>${showExp ? `<td class="hide-m muted">${esc(c.expansion || '—')}</td>` : ''}<td>${rarB(c.rarity)}</td>
     ${showGame ? `<td class="hide-m">${esc(c.game)}</td>` : ''}<td class="hide-m">${st.conds.map(condB).join(' ')}</td><td class="right"><b>${st.avail}</b></td><td class="right">${st.sold}</td>
     <td class="right hide-m">${eur(st.avgBuy)}</td><td class="right hide-m">${eur(st.avgSell)}</td>${SHOW_MKT ? `<td class="right nowrap">${mktCell(c)}</td>` : ''}</tr>`).join('')}
   </tbody></table></div>`;
@@ -1869,7 +1915,7 @@ function drawColl(){
         <select class="inp" id="gsort" style="width:auto">${sorts.map(([k, l]) => opt(k, F.sort, l)).join('')}</select><button class="btn sm" id="gdir" title="Inverti ordine">${F.dir > 0 ? '▲' : '▼'}</button>
         <div class="grow"></div><label class="small"><input type="checkbox" id="ckall" ${slice.length && slice.every(x => SEL.has(x.c.id)) ? 'checked' : ''}> seleziona la pagina</label></div>
       ${!slice.length ? '<div class="empty">Nessuna carta trovata.</div>' : `<div class="gridc">${slice.map(({c, st, ask}) => gcardHtml(c, {qty: F.st === 'vend' ? st.sold : st.avail, check: true,
-        sub: `${ask != null ? `<b style="color:var(--text)">${eur(ask)}</b> · ` : ''}${esc(c.expansion || '')}${c.rarity ? ' · ' + esc(c.rarity) : ''}`})).join('')}</div>`}${pager}`;
+        sub: `${ask != null ? `<b style="color:var(--text)">${eur(ask)}</b> · ` : ''}${esc(c.expansion || '')}`})).join('')}</div>`}${pager}`;
     queueImages(slice.map(x => x.c.id));
     $$('#ctab .gck').forEach(cb => { cb.addEventListener('click', e => e.stopPropagation()); cb.onchange = () => { cb.checked ? SEL.add(cb.dataset.ck) : SEL.delete(cb.dataset.ck); cb.closest('.gcard').classList.toggle('sel', cb.checked); drawSelBar(); }; });
     $('#ckall') && ($('#ckall').onchange = e => { slice.forEach(x => e.target.checked ? SEL.add(x.c.id) : SEL.delete(x.c.id)); drawColl(); });
@@ -1881,7 +1927,7 @@ function drawColl(){
   $('#ctab').innerHTML = !slice.length ? `<div class="empty">Nessuna carta trovata.</div>` : `<div class="tw"><table class="t"><thead><tr><th class="ck"><input type="checkbox" id="ckall" title="Seleziona tutta la pagina" ${slice.length && slice.every(x => SEL.has(x.c.id)) ? 'checked' : ''}></th><th class="tc"></th>
     ${th('name', 'Carta')}${th('exp', 'Espansione', 'hide-m')}${th('rar', 'Rarità')}${F.game ? '' : th('game', 'Gioco', 'hide-m')}<th class="hide-m">Condizioni</th>
     ${th('avail', 'Disp.', 'right')}${th('sold', 'Vend.', 'right')}${th('buy', 'Acq. medio', 'right hide-m')}${th('sell', 'Vend. medio', 'right hide-m')}${SHOW_MKT ? th('mkt', 'Mercato', 'right hide-m') : ''}${th('ask', 'In vendita a', 'right')}</tr></thead><tbody>
-    ${slice.map(({c, st, ask, askN}) => `<tr class="${SEL.has(c.id) ? 'sel' : ''}"><td class="ck"><input type="checkbox" data-ck="${c.id}" ${SEL.has(c.id) ? 'checked' : ''}></td><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${esc(c.name)}</a></td><td class="hide-m muted">${esc(c.expansion || '—')}</td><td>${c.rarity ? `<span class="b rar">${esc(c.rarity)}</span>` : ''}</td>
+    ${slice.map(({c, st, ask, askN}) => `<tr class="${SEL.has(c.id) ? 'sel' : ''}"><td class="ck"><input type="checkbox" data-ck="${c.id}" ${SEL.has(c.id) ? 'checked' : ''}></td><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${nameHtml(c.name)}</a></td><td class="hide-m muted">${esc(c.expansion || '—')}</td><td>${rarB(c.rarity)}</td>
       ${F.game ? '' : `<td class="hide-m nowrap">${esc(c.game)}</td>`}<td class="hide-m">${st.conds.map(condB).join(' ')}</td><td class="right"><b>${st.avail}</b></td><td class="right">${st.sold}</td>
       <td class="right hide-m">${eur(st.avgBuy)}</td><td class="right hide-m">${eur(st.avgSell)}</td>${SHOW_MKT ? `<td class="right nowrap hide-m">${mktCell(c)}</td>` : ''}
       <td class="right nowrap">${ask != null ? `${askN > 1 ? '<span class="small muted">da</span> ' : ''}<b>${eur(ask)}</b>` : '<span class="muted">—</span>'}</td></tr>`).join('')}
@@ -1931,7 +1977,7 @@ function pageCard(app, id){
   const attrs = x => `${condB(x.condition)} ${x.language ? `<span class="b lang">${esc(x.language)}</span>` : ''} ${x.edition ? `<span class="small muted">${esc(x.edition)}</span>` : ''}`;
   app.innerHTML = `
     <div class="crumbs"><a href="#/">Home</a> › <a href="#/g/${enc(c.game)}">${esc(c.game)}</a> › <a href="#/g/${enc(c.game)}/${enc(c.expansion)}">${esc(c.expansion || '(senza espansione)')}</a> › <b>${esc(c.name)}</b></div>
-    <div class="pagehead"><div class="grow"><h1>${esc(c.name)}</h1><div class="muted">${esc(c.expansion || '—')}${c.rarity ? ' · ' + esc(c.rarity) : ''}</div></div>
+    <div class="pagehead"><div class="grow"><h1>${nameHtml(c.name)}</h1><div class="muted">${esc(c.expansion || '—')} ${rarB(c.rarity)}</div></div>
       ${CM_GAMES[c.game] ? `<a class="btn cmlink" href="${esc(cmUrl(c, cmFor(c)))}" target="_blank" rel="noopener" title="${cmFor(c) ? 'Apri questa carta su Cardmarket' : 'Cerca su Cardmarket'}">${cmFor(c) ? 'Vedi su Cardmarket ↗' : 'Cerca su Cardmarket ↗'}</a>` : ''}
       <button class="btn" data-act="editCard" data-id="${c.id}">✎ Modifica</button>
       <button class="btn dan" data-act="delCard" data-id="${c.id}">Elimina</button>
@@ -1942,7 +1988,7 @@ function pageCard(app, id){
         <dl class="info" style="flex:1 1 230px;margin:0">
           <dt>Gioco</dt><dd>${esc(c.game)}</dd>
           <dt>Espansione</dt><dd><a href="#/g/${enc(c.game)}/${enc(c.expansion)}">${esc(c.expansion || '—')}</a></dd>
-          <dt>Rarità</dt><dd>${c.rarity ? `<span class="b rar">${esc(c.rarity)}</span>` : '—'}</dd>
+          <dt>Rarità</dt><dd>${rarB(c.rarity, '—')}</dd>
           <dt>Disponibili</dt><dd>${st.avail}</dd>
           <dt>Vendute</dt><dd>${st.sold}</dd>
           <dt>Acquisto medio</dt><dd>${eur(st.avgBuy)}</dd>
@@ -2278,7 +2324,7 @@ function orderForm(pre = {}){
     const drawRows = () => {
       $('#orows', m).innerHTML = rows.length ? rows.map((r, i) => {
         const x = S.copies.get(r.id), c = S.cards.get(x.card_id), est = x.ask_price ?? estCopy(c, x);
-        return `<div class="orow" data-i="${i}">${thumbHtml(c)}<div class="grow" style="min-width:0"><b>${esc(c.name)}</b>
+        return `<div class="orow" data-i="${i}">${thumbHtml(c)}<div class="grow" style="min-width:0"><b>${nameHtml(c.name)}</b>
           <div class="small muted">${esc(c.expansion || '—')}${c.rarity ? ' · ' + esc(c.rarity) : ''} ${condB(x.condition)} ${x.language ? `<span class="b lang">${esc(x.language)}</span>` : ''} ${locB(x.location)} · ${x.lot_id ? 'da lotto' : 'pagata ' + eur(x.buy_price) + ' cad.'}${est != null ? ` · ${x.ask_price != null ? 'in vendita a' : mktUnit(c, x) != null ? 'mercato' : 'di solito la vendi a'} ${eur(est)}` : ''}</div></div>
           <div class="oq"><label class="f">Q.tà <span style="font-weight:400">/ ${x.qty}</span></label><input class="inp" type="number" min="1" max="${x.qty}" value="${r.qty}" data-q></div>
           <div class="op"><label class="f">Prezzo €</label><input class="inp" inputmode="decimal" value="${esc(r.price)}" data-p placeholder="${est != null ? fmtIn(est * r.qty) : '0,00'}"></div>
@@ -2353,7 +2399,7 @@ const shipB = o => o.ship_status && SHIP[o.ship_status] ? `<span class="b ${SHIP
 const toShip = () => S.noShip || S.noOrders ? [] : [...S.orders.values()].filter(o => o.ship_status === 'da_spedire').sort((a, b) => (a.sell_date || '').localeCompare(b.sell_date || ''));
 const shipOpts = v => Object.entries(SHIP).map(([k, [l]]) => opt(k, v, l)).join('');
 /** elenco carte di un ordine con la posizione, per preparare il pacco */
-const pickList = id => orderItems(id).map(x => { const c = S.cards.get(x.card_id); return c ? `<div class="pick">${x.qty}× <b>${esc(c.name)}</b> <span class="muted">${esc(c.expansion || '')}</span> ${condB(x.condition)} ${x.language ? `<span class="b lang">${esc(x.language)}</span>` : ''} ${locB(x.location)}</div>` : ''; }).join('');
+const pickList = id => orderItems(id).map(x => { const c = S.cards.get(x.card_id); return c ? `<div class="pick">${x.qty}× <b>${nameHtml(c.name)}</b> <span class="muted">${esc(c.expansion || '')}</span> ${condB(x.condition)} ${x.language ? `<span class="b lang">${esc(x.language)}</span>` : ''} ${locB(x.location)}</div>` : ''; }).join('');
 function shipForm(id){
   const o = S.orders.get(id); if (!o) return;
   if (S.noShip){ upgradeModal(); return; }
@@ -2388,7 +2434,7 @@ function orderView(id){
       <div class="full"><label class="f">Note</label><input class="inp" name="notes" value="${esc(o.notes || '')}"></div>
     </div>
     <div class="tw" style="margin-top:14px;border:1px solid var(--line);border-radius:6px"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th>Q.tà</th><th></th><th class="right">Prezzo</th><th class="right">Netto</th><th class="right">Margine</th><th></th></tr></thead><tbody>
-      ${k.items.map(x => { const c = S.cards.get(x.card_id); if (!c) return ''; return `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}" data-close-link>${esc(c.name)}</a><div class="small muted">${esc(c.expansion || '')} ${locB(x.location)}</div></td><td>${x.qty}</td><td>${condB(x.condition)}</td>
+      ${k.items.map(x => { const c = S.cards.get(x.card_id); if (!c) return ''; return `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}" data-close-link>${nameHtml(c.name)}</a><div class="small muted">${esc(c.expansion || '')} ${locB(x.location)}</div></td><td>${x.qty}</td><td>${condB(x.condition)}</td>
         <td class="right">${eur(x.sell_price)}</td><td class="right">${eur(netSell(x))}</td><td class="right">${x.lot_id ? '<span class="small muted">sul lotto</span>' : x.buy_price != null ? signEur(netSell(x) - x.buy_price * x.qty) : '—'}</td>
         <td class="acts"><button type="button" class="btn sm" data-act="editCopy" data-id="${x.id}">✎</button></td></tr>`; }).join('') || '<tr><td colspan="8" class="empty">Nessuna carta in questo ordine.</td></tr>'}
     </tbody></table></div>
@@ -2513,7 +2559,7 @@ function pageStats(app){
         ${s.buckets.map(b => `<div class="hrow"><span>${b.l}</span>${hbar(b.n, maxB)}<b>${b.n}</b><span class="small muted">${s.held.length ? pctTxt(b.n / s.held.length * 100) : ''}</span></div>`).join('')}
         ${s.availAge != null ? `<div class="small muted" style="margin-top:10px">Le carte ancora disponibili sono in magazzino da ${daysTxt(s.availAge)} in media.</div>` : ''}</div>
       <div class="panel flush" style="flex:1 1 380px"><div class="panel-h"><h2>Carte vendute più spesso</h2></div><div class="tw"><table class="t"><thead><tr><th>Carta</th><th class="right">Vendute</th><th class="right">Netto</th><th class="right hide-m">Tempo medio</th></tr></thead><tbody>
-        ${topCards.map(g => { const c = S.cards.get(g.k); return `<tr><td><a class="cname" href="#/c/${c.id}">${esc(c.name)}</a><div class="small muted">${esc(c.expansion || '')}</div></td><td class="right"><b>${g.qty}</b></td><td class="right">${eur(g.net)}</td><td class="right hide-m">${daysTxt(g.avgDays)}</td></tr>`; }).join('')}
+        ${topCards.map(g => { const c = S.cards.get(g.k); return `<tr><td><a class="cname" href="#/c/${c.id}">${nameHtml(c.name)}</a><div class="small muted">${esc(c.expansion || '')}</div></td><td class="right"><b>${g.qty}</b></td><td class="right">${eur(g.net)}</td><td class="right hide-m">${daysTxt(g.avgDays)}</td></tr>`; }).join('')}
       </tbody></table></div></div>
     </div>
     ${!SG && games.length > 1 ? `<div class="panel flush"><div class="panel-h"><h2>Per gioco</h2></div><div class="tw"><table class="t"><thead><tr><th>Gioco</th><th class="right">Vendute</th><th class="right hide-m">Lordo</th><th class="right">Netto</th><th class="right">Margine singole</th><th class="right hide-m">Resa</th><th class="right hide-m">Tempo medio</th></tr></thead><tbody>
@@ -2584,12 +2630,12 @@ function pageLot(app, id){
     <div class="panel">${progBar(s.pct, s.profit >= 0, true)}<div class="small muted" style="display:flex;justify-content:space-between;margin:4px 0 10px"><span>${Math.floor(Math.min(s.pct, 999))}% ripagato</span><span>${eur(s.earned)} su ${eur(l.total_price)}</span></div><div>${msg}</div></div>
     <div class="panel flush"><div class="panel-h"><h2>Da vendere</h2><span class="muted">${s.left}</span></div>
       ${av.length ? `<div class="tw"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th class="hide-m">Espansione</th><th>Rarità</th><th>Q.tà</th><th></th><th class="right">Stima</th><th></th></tr></thead><tbody>
-      ${av.map(({x, c, est}) => `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${esc(c.name)}</a></td><td class="hide-m muted">${esc(c.expansion)}</td><td>${c.rarity ? `<span class="b rar">${esc(c.rarity)}</span>` : ''}</td><td>${x.qty}</td><td>${condB(x.condition)}</td>
+      ${av.map(({x, c, est}) => `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${nameHtml(c.name)}</a></td><td class="hide-m muted">${esc(c.expansion)}</td><td>${rarB(c.rarity)}</td><td>${x.qty}</td><td>${condB(x.condition)}</td>
         <td class="right">${est != null ? eur(est * x.qty) : '<span class="muted">—</span>'}</td>
         <td class="acts"><button class="btn sm ok" data-act="sell" data-id="${x.id}">Vendi</button> <button class="btn sm" data-act="editCopy" data-id="${x.id}">✎</button></td></tr>`).join('')}
       </tbody></table></div>` : `<div class="empty">Tutte le carte di questo lotto sono vendute.</div>`}</div>
     ${so.length ? `<div class="panel flush"><div class="panel-h"><h2>Vendute</h2><span class="muted">${s.sold}</span></div><div class="tw"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th>Data</th><th>Q.tà</th><th class="right">Prezzo</th><th class="right">Netto</th><th></th></tr></thead><tbody>
-      ${so.map(({x, c}) => `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${esc(c.name)}</a></td><td class="nowrap">${fdate(x.sell_date)}</td><td>${x.qty}</td><td class="right">${eur(x.sell_price)}</td><td class="right">${eur(netSell(x))}</td>
+      ${so.map(({x, c}) => `<tr><td class="tc">${thumbHtml(c)}</td><td><a class="cname" href="#/c/${c.id}">${nameHtml(c.name)}</a></td><td class="nowrap">${fdate(x.sell_date)}</td><td>${x.qty}</td><td class="right">${eur(x.sell_price)}</td><td class="right">${eur(netSell(x))}</td>
         <td class="acts">${x.order_id ? `<button class="btn sm" data-act="viewOrder" data-id="${x.order_id}" title="Apri vendita">🧾</button> ` : ''}<button class="btn sm" data-act="editCopy" data-id="${x.id}">✎</button></td></tr>`).join('')}
     </tbody></table></div></div>` : ''}`;
   queueImages(rows.map(r => r.c.id));
@@ -2702,7 +2748,7 @@ function pageStale(app){
       <div class="stat"><div class="l">Valore stimato</div><div class="v">${est ? '≈ ' + eur(est) : '—'}</div><div class="s">${SHOW_MKT ? 'a prezzo di mercato Cardmarket' : 'dai tuoi prezzi di vendita'}</div></div>
     </div>
     ${list.length ? `<div class="tw" style="margin-top:14px"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th class="hide-m">Espansione</th><th></th><th>Q.tà</th><th class="hide-m">Acquistata</th><th>Ferma da</th><th class="right">Costo</th><th class="right">Stima</th><th class="right">In vendita a</th><th></th></tr></thead><tbody>
-      ${list.slice(0, 300).map(({c, card, days, est, cost}) => `<tr><td class="tc">${thumbHtml(card)}</td><td><a class="cname" href="#/c/${card.id}">${esc(card.name)}</a>${card.rarity ? `<div class="small muted">${esc(card.rarity)}</div>` : ''}</td><td class="hide-m muted">${esc(card.expansion || '—')}</td>
+      ${list.slice(0, 300).map(({c, card, days, est, cost}) => `<tr><td class="tc">${thumbHtml(card)}</td><td><a class="cname" href="#/c/${card.id}">${nameHtml(card.name)}</a>${card.rarity ? `<div class="small muted">${esc(card.rarity)}</div>` : ''}</td><td class="hide-m muted">${esc(card.expansion || '—')}</td>
         <td>${condB(c.condition)} ${c.language ? `<span class="b lang">${esc(c.language)}</span>` : ''}</td><td>${c.qty}</td><td class="hide-m nowrap">${fdate(c.buy_date)}</td>
         <td class="nowrap"><span class="b ${days >= 365 ? 'c-PL' : days >= 180 ? 'c-LP' : 'c-x'}">${ageTxt(days)}</span></td>
         <td class="right">${c.lot_id ? `<a class="b lotb" href="#/lotto/${c.lot_id}">lotto</a>` : eur(cost)}</td><td class="right">${est != null ? eur(est) : '<span class="muted">—</span>'}</td>
