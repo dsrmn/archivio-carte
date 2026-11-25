@@ -180,6 +180,23 @@ async def main():
             await page.set_viewport_size({"width": 1280, "height": 900})
         await step("Nuova grafica", grafica)
 
+        async def richieste():
+            ash = await ev("[...S.cards.values()].find(c => c.name.startsWith('Ash Blossom')).id")
+            await ev(f"""(() => {{ S.noReq = false; S.requests = new Map([['r1', {{id: 'r1', name: 'Marco Rossi', contact: '@marco_rossi', note: 'Ritiro a mano', status: 'nuova', notified: true, created_at: new Date().toISOString(),
+              total_qty: 2, items: [{{card_id: '{ash}', name: 'Ash Blossom & Joyous Spring', expansion: 'Maximum Crisis', rarity: 'Secret Rare', qty: 2}}]}}]]); return 1; }})()""")
+            await go("#/")
+            check("Home: avviso delle richieste nuove", "1 richiesta nuova dalla vetrina" in await page.inner_text("#app"))
+            check("menu: Richieste con il numero", "Richieste1" in (await page.inner_text(".subnav")).replace(" ", "").replace("\n", ""))
+            await go("#/richieste"); t = await page.inner_text("#app")
+            check("pagina Richieste: nome, contatto, note e carte", all(x in t for x in ["Marco Rossi", "@marco_rossi", "Ritiro a mano", "Ash Blossom"]), t[:200])
+            link = await page.get_attribute("a[href^='https://t.me/']", "href")
+            check("il contatto Telegram è un link", link == "https://t.me/marco_rossi", link)
+            await page.click("[data-act=reqSell]"); await W(400)
+            n = await ev("$$('#orows [data-p]').length")
+            check("Crea vendita: carte e acquirente già compilati", n >= 1 and await page.input_value("#of [name=buyer]") == "Marco Rossi" and await page.input_value("#of [name=platform]") == "Vetrina", n)
+            await ev("closeModal(); S.requests = new Map(); S.noReq = true; 1")
+        await step("Richieste dalla vetrina", richieste)
+
         async def vendita():
             ash = await ev("[...S.copies.values()].find(c => c.status !== 'venduto' && S.cards.get(c.card_id).name.startsWith('Ash Blossom') && c.buy_price === 8).id")
             await ev(f"orderForm({{items: ['{ash}']}})"); await W(400)
@@ -348,7 +365,7 @@ async def main():
             gp.on("pageerror", lambda e: gerr.append(str(e)))
             rows = [{"card_id": "a1", "game": "Yu-Gi-Oh!", "expansion": "Maximum Crisis", "name": "Ash Blossom & Joyous Spring", "rarity": "Secret Rare", "image_url": None, "qty": 3, "conditions": "NM,EX", "languages": "EN-EU"},
                     {"card_id": "b2", "game": "Pokémon", "expansion": "151", "name": "Charizard ex", "rarity": "Double Rare", "image_url": None, "qty": 1, "conditions": "NM", "languages": "IT"}]
-            calls = []
+            calls = []; fcalls = []; fmode = {"fail": True}
             async def groute(r):
                 u = r.request.url
                 if "test.supabase.co" in u:
@@ -356,6 +373,10 @@ async def main():
                     h = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"}
                     if r.request.method == "OPTIONS":
                         return await r.fulfill(status=200, headers=h, body="")
+                    if "functions/v1/vetrina-richiesta" in u:
+                        fcalls.append(json.loads(r.request.post_data or "{}"))
+                        if fmode["fail"]: return await r.fulfill(status=500, headers={**h, "Content-Type": "application/json"}, body=json.dumps({"error": "Telegram non configurato"}))
+                        return await r.fulfill(status=200, headers={**h, "Content-Type": "application/json"}, body=json.dumps({"ok": True, "id": "r1", "notified": True}))
                     ok = "A" * 30 in (r.request.post_data or "")
                     info = [{"title": "Vetrina di prova", "whatsapp": "333 1234567", "telegram": "dsr_carte"}]
                     body = (rows if "guest_stock" in u else info) if ok else []
@@ -386,21 +407,33 @@ async def main():
             await gp.click("#modal [data-ci='a1'] [data-dq='-1']"); await gp.wait_for_timeout(150)
             check("carrello: la quantità si può diminuire", (await gp.inner_text("#modal [data-ci='a1'] .stepper b")).strip() == "2")
             await gp.evaluate("() => { window.__open = []; window.open = function (u){ window.__open.push(String(u)); return null; }; }")
-            await gp.fill("#modal [name=nm]", ""); await gp.click("#modal [data-send=wa]"); await gp.wait_for_timeout(200)
-            check("carrello: senza nome non si invia", not await gp.evaluate("window.__open.length") and await gp.is_visible("#cerr"))
-            await gp.fill("#modal [name=nm]", "Marco Rossi"); await gp.fill("#modal [name=note]", "Ritiro a mano")
+            await gp.fill("#modal [name=nm]", ""); await gp.click("#modal [data-send=api]"); await gp.wait_for_timeout(200)
+            check("carrello: senza nome non si invia", not fcalls and await gp.is_visible("#cerr"))
+            await gp.fill("#modal [name=nm]", "Marco Rossi"); await gp.click("#modal [data-send=api]"); await gp.wait_for_timeout(200)
+            check("carrello: senza contatto non si invia", not fcalls and "ricontattarti" in await gp.inner_text("#cerr"))
+            await gp.fill("#modal [name=ct]", "@marco_rossi"); await gp.fill("#modal [name=note]", "Ritiro a mano")
+            await gp.click("#modal [data-send=api]"); await gp.wait_for_timeout(600)
+            check("invio non riuscito: messaggio chiaro e alternative", "Invio non riuscito" in await gp.inner_text("#cerr") and await gp.is_visible("#cfall") and "1 carta" not in (await gp.inner_text("#gbar")), await gp.inner_text("#cerr"))
             await gp.click("#modal [data-send=wa]"); await gp.wait_for_timeout(200)
             from urllib.parse import unquote
             opened = await gp.evaluate("window.__open"); u0 = unquote(opened[0]) if opened else ""
-            check("WhatsApp si apre con nome, carte e note", u0.startswith("https://wa.me/393331234567?text=") and "Sono Marco Rossi" in u0 and "2× Ash Blossom" in u0 and "1× Charizard ex" in u0 and "Ritiro a mano" in u0, u0[:200])
+            check("alternativa WhatsApp con nome, contatto, carte e note", u0.startswith("https://wa.me/393331234567?text=") and "Sono Marco Rossi (@marco_rossi)" in u0 and "2× Ash Blossom" in u0 and "1× Charizard ex" in u0 and "Ritiro a mano" in u0, u0[:200])
             await gp.click("#modal [data-send=tg]"); await gp.wait_for_timeout(200)
-            check("Telegram apre la chat del proprietario", (await gp.evaluate("window.__open"))[-1] == "https://t.me/dsr_carte")
+            check("alternativa Telegram apre la chat del proprietario", (await gp.evaluate("window.__open"))[-1] == "https://t.me/dsr_carte")
             await gp.click("#modal [data-ci='b2'] [data-rm]"); await gp.wait_for_timeout(200)
             check("carrello: si può togliere una carta", not await gp.query_selector("#modal [data-ci='b2']") and "1 carta" in await gp.inner_text("#gbar"))
             await gp.reload(); await gp.wait_for_timeout(1500)
             check("carrello: resta salvato se ricarichi la pagina", "1 carta" in await gp.inner_text("#gbar"))
             await gp.click("#gcart"); await gp.wait_for_timeout(300)
             check("carrello: il nome viene ricordato", await gp.input_value("#modal [name=nm]") == "Marco Rossi")
+            check("carrello: anche il contatto viene ricordato", await gp.input_value("#modal [name=ct]") == "@marco_rossi")
+            fmode["fail"] = False; fcalls.clear()
+            await gp.click("#modal [data-send=api]"); await gp.wait_for_timeout(700)
+            sent = fcalls[0] if fcalls else {}
+            check("invio riuscito: la richiesta parte con link, nome, contatto e carte", sent.get("token") == "A" * 30 and sent.get("name") == "Marco Rossi" and sent.get("contact") == "@marco_rossi" and sent.get("items") == [{"card_id": "a1", "qty": 2}], sent)
+            check("invio riuscito: conferma e carrello svuotato", "Richiesta inviata" in await gp.inner_text("#modal .mbox") and not await gp.query_selector("#gbar"))
+            await gp.click("#modal [data-c]"); await gp.wait_for_timeout(200)
+            await gp.click("[data-want='a1']"); await gp.click("#gcart"); await gp.wait_for_timeout(200)
             await gp.click("#modal [data-clear]"); await gp.wait_for_timeout(200)
             check("la richiesta si può svuotare", not await gp.query_selector("#gbar") and "vuoto" in await gp.inner_text("#modal .mbox"))
             await gp.click("#modal [data-c]")
@@ -415,8 +448,8 @@ async def main():
             check("la vetrina ha anche la vista a lista", len(await gp.query_selector_all("#glist tbody tr")) == 2)
             await gp.click("#gg [data-g='Pokémon']"); await gp.wait_for_timeout(200)
             check("filtro per gioco nella vetrina", len(await gp.query_selector_all("#glist tbody tr")) == 1)
-            only_rpc = all("rpc/guest_stock" in c[1] or "rpc/guest_info" in c[1] for c in calls if c[0] != "OPTIONS")
-            check("la vetrina usa solo la funzione di sola lettura", calls and only_rpc, calls[:3])
+            only_rpc = all("rpc/guest_stock" in c[1] or "rpc/guest_info" in c[1] or "functions/v1/vetrina-richiesta" in c[1] for c in calls if c[0] != "OPTIONS")
+            check("la vetrina usa solo le funzioni della vetrina (niente accesso diretto ai dati)", calls and only_rpc, calls[:3])
             await gp.goto(URL + "#/vetrina/" + "B" * 30 + "?u=https%3A%2F%2Ftest.supabase.co&k=chiave-anon"); await gp.wait_for_timeout(1200)
             check("un codice sbagliato non mostra nessuna carta", "Nessuna carta disponibile" in await gp.inner_text("#glist"))
             check("nessun errore JavaScript nella vetrina", not gerr, gerr[:3])

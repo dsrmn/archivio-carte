@@ -448,6 +448,18 @@ a.panel.banner:hover{border-color:var(--neon)}
 .cform{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
 .cerr{color:var(--red);margin-top:8px}
 @media (max-width:760px){.citem{grid-template-columns:52px 1fr;gap:10px}.cthumb.cimg{width:52px}.cqty{grid-column:2;text-align:left;display:flex;gap:10px;align-items:center}.cdel{grid-column:2;justify-self:start}}
+
+/* richieste */
+.nbadge{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--neon);color:#0b0820;font-size:11px;font-weight:700;margin-left:4px;vertical-align:1px;text-shadow:none}
+a.panel.banner.req{border-color:#1f7a7c;background:linear-gradient(90deg,rgba(45,226,230,.14),var(--card))}
+.rq .rqn{font-family:var(--disp);font-size:17px}.rq.evasa,.rq.annullata{opacity:.72}
+.rq .acts{display:flex;gap:6px;flex-wrap:wrap}
+.rqnote{padding:10px 16px;border-bottom:1px solid var(--line2);background:rgba(255,225,77,.06);font-size:14px}
+/* carrello: invio */
+.btn.big{padding:10px 22px;font-size:15px}
+.cfall{margin-top:12px;padding:10px 12px;border:1px dashed var(--line);border-radius:4px}.cfb{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.csent{text-align:center;padding:26px 10px 6px}.csent h2{font-size:26px;margin:10px 0 6px}.csent p{max-width:44ch;margin:0 auto}
+.cok{width:64px;height:64px;margin:0 auto;border-radius:50%;display:grid;place-items:center;font-size:34px;color:#0b0820;background:var(--green);box-shadow:0 0 30px rgba(61,255,154,.45)}
 </style>
 </head>
 <body>
@@ -615,6 +627,7 @@ async function loadAll(){
     S.noAsk = S.mode === 'supabase' && rows0(S.copies) && !('ask_price' in rows0(S.copies));
     S.noLoc = S.mode === 'supabase' && rows0(S.copies) && !('location' in rows0(S.copies));
     S.noShip = S.mode === 'supabase' && !S.noOrders && rows0(S.orders) && !('ship_status' in rows0(S.orders));
+    await loadRequests();
   } finally { busy(false); }
 }
 
@@ -1454,14 +1467,14 @@ const waNumber = v => { let d = String(v || '').replace(/[^\d+]/g, '').replace(/
 const tgUser = v => { const u = String(v || '').trim().replace(/^https?:\/\/(t\.me|telegram\.me)\//i, '').replace(/^@/, ''); return /^[A-Za-z0-9_]{4,32}$/.test(u) ? u : ''; };
 /* ===== carrello della vetrina ===== */
 const cartKey = () => 'cardarchive.cart.' + (G.token || '').slice(0, 12);
-const GNAME_KEY = 'cardarchive.guestname';
+const GNAME_KEY = 'cardarchive.guestname', GCONTACT_KEY = 'cardarchive.guestcontact';
 function cartSave(){ try { localStorage.setItem(cartKey(), JSON.stringify([...G.want.entries()])); } catch { /* memoria piena o non disponibile */ } }
 function cartLoad(){ try { const a = JSON.parse(localStorage.getItem(cartKey()) || '[]'); G.want = new Map(Array.isArray(a) ? a.filter(x => Array.isArray(x) && x.length === 2) : []); } catch { G.want = new Map(); } }
 const cartItems = () => [...G.want.entries()].map(([id, q]) => ({r: (G.rows || []).find(x => x.card_id === id), q})).filter(x => x.r);
 const cartQty = () => sum([...G.want.values()], v => v);
-function guestMessage(name, note){
+function guestMessage(name, note, contact = ''){
   const items = cartItems();
-  return `Ciao! Sono ${name}. ${G.info?.title ? 'Dalla vetrina “' + G.info.title + '”' : 'Dalla tua vetrina'} vorrei:\n` +
+  return `Ciao! Sono ${name}${contact ? ' (' + contact + ')' : ''}. ${G.info?.title ? 'Dalla vetrina “' + G.info.title + '”' : 'Dalla tua vetrina'} vorrei:\n` +
     items.map(({r, q}) => `• ${q}× ${r.name}${r.expansion || r.rarity ? ' — ' + [r.expansion, r.rarity].filter(Boolean).join(' · ') : ''}`).join('\n') +
     `\nTotale: ${items.length} ${items.length === 1 ? 'carta' : 'carte'}, ${cartQty()} ${cartQty() === 1 ? 'copia' : 'copie'}.` +
     (note ? `\nNote: ${note}` : '') + '\nSono ancora disponibili? Grazie!';
@@ -1493,17 +1506,19 @@ function openCart(){
         <button type="button" class="btn sm dan cdel" data-rm title="Togli dal carrello">✕ Togli</button></div>`).join('')}
       <div class="ctot"><span>Totale</span><b>${items.length} ${items.length === 1 ? 'carta' : 'carte'} · ${cartQty()} ${cartQty() === 1 ? 'copia' : 'copie'}</b><button type="button" class="btn sm" data-clear>Svuota carrello</button></div></div>
       <form id="cform" class="cform" novalidate>
-        <div class="fg"><div class="full"><label class="f">Il tuo nome *</label><input class="inp" name="nm" required maxlength="60" autocomplete="name" placeholder="es. Marco Rossi" value="${esc(localStorage.getItem(GNAME_KEY) || '')}"></div>
+        <div class="fg"><div><label class="f">Il tuo nome *</label><input class="inp" name="nm" required maxlength="60" autocomplete="name" placeholder="es. Marco Rossi" value="${esc(localStorage.getItem(GNAME_KEY) || '')}"></div>
+          <div><label class="f">Come ti ricontatto *</label><input class="inp" name="ct" required maxlength="80" placeholder="@username Telegram, telefono o email" value="${esc(localStorage.getItem(GCONTACT_KEY) || '')}"></div>
           <div class="full"><label class="f">Note <span style="font-weight:400">(facoltative)</span></label><textarea class="inp" name="note" rows="2" maxlength="300" placeholder="es. spedizione in Italia, preferisco ritiro a mano…"></textarea></div></div>
-        <div class="cerr small" id="cerr" hidden>Scrivi il tuo nome per inviare la richiesta.</div>
-        <div class="mfoot"><button type="button" class="btn" data-c>Continua a guardare</button>
-          ${wa ? '<button type="submit" class="btn ok" data-send="wa">Invia su WhatsApp</button>' : ''}${tg ? '<button type="submit" class="btn pri" data-send="tg">Invia su Telegram</button>' : ''}
-          <button type="submit" class="btn ${wa || tg ? '' : 'pri'}" data-send="copy">Copia la richiesta</button></div>
-        <div class="small muted" style="margin-top:8px">${wa || tg ? 'Si apre la chat con il messaggio già scritto: controllalo e invialo.' : 'Copia il messaggio e mandalo a chi ti ha dato il link.'}</div>
+        <div class="cerr small" id="cerr" hidden></div>
+        <div class="mfoot"><button type="button" class="btn" data-c>Continua a guardare</button><button type="submit" class="btn pri big" data-send="api">Invia richiesta</button></div>
+        <div class="cfall" id="cfall" hidden><div class="small">Se l'invio non funziona, manda la richiesta tu:</div>
+          <div class="cfb">${wa ? '<button type="button" class="btn sm ok" data-send="wa">WhatsApp</button>' : ''}${tg ? '<button type="button" class="btn sm" data-send="tg">Telegram</button>' : ''}<button type="button" class="btn sm" data-send="copy">Copia il messaggio</button></div></div>
       </form>`;
   };
   openModal('🛒 Il tuo carrello', body(), {wide: true, onMount: m => {
-    const redraw = () => { const nm = $('[name=nm]', m)?.value, note = $('[name=note]', m)?.value; $('.mbody', m).innerHTML = body(); if (nm != null && $('[name=nm]', m)) $('[name=nm]', m).value = nm; if (note && $('[name=note]', m)) $('[name=note]', m).value = note; };
+    const redraw = () => { const v = ['nm', 'ct', 'note'].map(k => $(`[name=${k}]`, m)?.value); $('.mbody', m).innerHTML = body(); ['nm', 'ct', 'note'].forEach((k, i) => { if (v[i] != null && $(`[name=${k}]`, m)) $(`[name=${k}]`, m).value = v[i]; }); };
+    const done = (ct, notified) => { $('.mbody', m).innerHTML = `<div class="csent"><div class="cok">✓</div><h2>Richiesta inviata!</h2><p class="muted">Ti ricontatterò al più presto${ct ? ' su <b>' + esc(ct) + '</b>' : ''} per confermare disponibilità, prezzo e spedizione.</p>
+        <div class="mfoot" style="justify-content:center"><button class="btn pri" data-c>Torna alla vetrina</button></div></div>`; };
     m.addEventListener('click', async e => {
       if (e.target.closest('[data-c]')){ closeModal(); return; }
       const it = e.target.closest('[data-ci]'), id = it?.dataset.ci;
@@ -1513,15 +1528,25 @@ function openCart(){
       if (e.target.closest('[data-clear]')){ G.want.clear(); cartChanged(); redraw(); return; }
       const send = e.target.closest('[data-send]'); if (!send) return;
       e.preventDefault();
-      const nm = clean($('[name=nm]', m).value), note = clean($('[name=note]', m).value);
-      if (!nm){ $('#cerr', m).hidden = false; $('[name=nm]', m).focus(); return; }
-      localStorage.setItem(GNAME_KEY, nm);
-      const msg = guestMessage(nm, note);
+      const nm = clean($('[name=nm]', m).value), ct = clean($('[name=ct]', m).value), note = clean($('[name=note]', m).value), err = $('#cerr', m);
+      if (!nm || !ct){ err.textContent = !nm ? 'Scrivi il tuo nome per inviare la richiesta.' : 'Scrivi come posso ricontattarti (username Telegram, telefono o email).'; err.hidden = false; $(`[name=${!nm ? 'nm' : 'ct'}]`, m).focus(); return; }
+      localStorage.setItem(GNAME_KEY, nm); localStorage.setItem(GCONTACT_KEY, ct);
+      const msg = guestMessage(nm, note, ct);
+      if (send.dataset.send === 'api'){
+        send.disabled = true; send.textContent = 'Invio…';
+        try {
+          const {data, error} = await sb.functions.invoke('vetrina-richiesta', {body: {token: G.token, name: nm, contact: ct, note, site: location.origin + location.pathname,
+            items: cartItems().map(({r, q}) => ({card_id: r.card_id, qty: q}))}});
+          if (error || !data?.ok){ let t = ''; try { t = (await error?.context?.json?.())?.error || ''; } catch { /* risposta non JSON */ } throw new Error(t || data?.error || 'Invio non riuscito'); }
+          G.want.clear(); cartChanged(); done(ct, data.notified);
+        } catch (ex){ err.textContent = 'Invio non riuscito: ' + (ex.message || 'riprova tra poco') + '.'; err.hidden = false; $('#cfall', m).hidden = false; send.disabled = false; send.textContent = 'Riprova'; }
+        return;
+      }
       if (send.dataset.send === 'wa') window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
       else if (send.dataset.send === 'tg'){ await copyText(msg); toast('Richiesta copiata: incollala nella chat che si apre'); window.open(`https://t.me/${tg}`, '_blank', 'noopener'); }
       else toast(await copyText(msg) ? 'Richiesta copiata: incollala dove vuoi' : 'Impossibile copiare', '');
     });
-    m.addEventListener('input', e => { if (e.target.name === 'nm' && clean(e.target.value)) $('#cerr', m).hidden = true; });
+    m.addEventListener('input', e => { if (['nm', 'ct'].includes(e.target.name) && clean(e.target.value) && $('#cerr', m)) $('#cerr', m).hidden = true; });
     m.addEventListener('submit', e => e.preventDefault());
   }});
 }
@@ -1684,7 +1709,7 @@ function route(){
 function shell(){
   const r = route(), p0 = r.parts[0] || '', g = p0 === 'g' || p0 === 'c' ? (p0 === 'g' ? r.parts[1] : S.cards.get(r.parts[1])?.game) : null;
   const nav = (href, lbl, on, xm) => `<a href="${href}" class="${on ? 'on' : ''}${xm ? ' xm' : ''}">${lbl}</a>`;
-  const moreOn = !!g || ['lotti', 'lotto', 'giacenze', 'statistiche', 'dati', 'collega'].includes(p0);
+  const moreOn = !!g || ['lotti', 'lotto', 'giacenze', 'statistiche', 'dati', 'collega', 'richieste'].includes(p0);
   return `
   <header class="top"><div class="top-in">
     <a class="logo" href="#/"><i>D</i>DSR&nbsp;<span>Archive</span></a>
@@ -1702,6 +1727,7 @@ function shell(){
     <span class="sep"></span>
     ${nav('#/collezione', 'Collezione', p0 === 'collezione')}
     ${nav('#/vendite', 'Vendite', p0 === 'vendite')}
+    ${S.noReq ? '' : nav('#/richieste', `Richieste${newRequests().length ? ` <span class="nbadge">${newRequests().length}</span>` : ''}`, p0 === 'richieste', true)}
     ${nav('#/lotti', 'Lotti', p0 === 'lotti' || p0 === 'lotto', true)}
     ${nav('#/giacenze', 'Giacenze', p0 === 'giacenze', true)}
     ${nav('#/guadagni', 'Guadagni', p0 === 'guadagni')}
@@ -1736,6 +1762,7 @@ function render(){
     else if (p0 === 'lotto') pageLot(app, p1);
     else if (p0 === 'guadagni') pageEarnings(app);
     else if (p0 === 'statistiche') pageStats(app);
+    else if (p0 === 'richieste') pageRequests(app);
     else if (p0 === 'vendite') pageOrders(app);
     else if (p0 === 'giacenze') pageStale(app);
     else if (p0 === 'collega') pageLink(app);
@@ -1799,6 +1826,8 @@ function pageHome(app){
     ${(() => { const rc = recentCards(14); if (rc.length < 3) return '';
       return `<div class="panel"><div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px"><h2 style="margin:0">Ultime aggiunte</h2><a class="small" href="#/collezione?vista=griglia">Vedi tutte in griglia</a></div>
         <div class="shelf">${rc.map(c => { const st = cardStats(c.id); return gcardHtml(c, {qty: st.avail, sub: esc(c.expansion || '')}); }).join('')}</div></div>`; })()}
+    ${(() => { const nr = newRequests(); if (!nr.length) return '';
+      return `<a class="panel banner req" href="#/richieste"><span style="font-size:22px">🛒</span><div class="grow"><b>${nr.length} ${nr.length === 1 ? 'richiesta nuova' : 'richieste nuove'} dalla vetrina</b><div class="small muted">${nr.slice(0, 3).map(r => esc(r.name)).join(', ')}${nr.length > 3 ? '…' : ''} · ${sum(nr, r => r.total_qty)} copie richieste</div></div><span class="btn sm">Vedi →</span></a>`; })()}
     ${(() => { const ts = toShip(); if (!ts.length) return '';
       return `<a class="panel banner ship" href="#/vendite?stato=da_spedire"><span style="font-size:22px">📦</span><div class="grow"><b>${ts.length} ${ts.length === 1 ? 'ordine da spedire' : 'ordini da spedire'}</b><div class="small muted">${sum(ts, o => oc(o).qty)} carte · il più vecchio è del ${fdate(ts[0].sell_date)}</div></div><span class="btn sm">Prepara →</span></a>`; })()}
     ${(() => { const mo = SET.stale || 6, st = staleList(mo, ''); if (!st.length) return '';
@@ -2368,8 +2397,8 @@ function orderForm(pre = {}){
   openModal('Nuova vendita', `<form id="of" autocomplete="off">
     <div class="fg">
       <div><label class="f">Data</label><input class="inp" type="date" name="date" value="${today()}"></div>
-      <div><label class="f">Piattaforma</label><input class="inp" name="platform" list="dl-pl" value="${esc(plat0)}"></div>
-      <div><label class="f">Acquirente <span style="font-weight:400">(facoltativo)</span></label><input class="inp" name="buyer" placeholder="nome utente"></div>
+      <div><label class="f">Piattaforma</label><input class="inp" name="platform" list="dl-pl" value="${esc(pre.platform || plat0)}"></div>
+      <div><label class="f">Acquirente <span style="font-weight:400">(facoltativo)</span></label><input class="inp" name="buyer" placeholder="nome utente" value="${esc(pre.buyer || '')}"></div>
       ${S.noShip ? '' : `<div><label class="f">Spedizione</label><select class="inp" name="ship">${shipOpts('da_spedire')}</select></div>`}
     </div>
     <h3 style="margin:16px 0 4px">Carte vendute</h3>
@@ -2454,7 +2483,8 @@ function orderForm(pre = {}){
           else { await tx.update('copies', x.id, {qty: x.qty - q}); const {id: _i, created_at: _c, user_id: _u, ...rest} = S.copies.get(x.id); await tx.insert('copies', {...rest, id: uid(), qty: q, ...sale}); }
         }
       });
-      if (ok){ closeModal(); celebrateLots(before); }
+      if (ok){ closeModal(); celebrateLots(before);
+        if (pre.requestId && S.requests.has(pre.requestId)) setRequest(pre.requestId, {status: 'evasa', handled_at: new Date().toISOString()}, 'Vendita registrata e richiesta segnata come evasa'); }
     };
     drawRows(); upd();
     if (!rows.length) setTimeout(() => $('#oadd', m).focus(), 50); else setTimeout(() => $('[data-p]', m)?.focus(), 50);
@@ -2568,6 +2598,67 @@ function pageOrders(app){
     ${legacy ? `<div class="note">${legacy} ${legacy === 1 ? 'carta venduta' : 'carte vendute'} prima degli ordini (o importate da Excel) non ${legacy === 1 ? 'compare' : 'compaiono'} qui: nei guadagni ${legacy === 1 ? 'conta' : 'contano'} al prezzo pieno, senza commissioni né spedizioni.</div>` : ''}`;
 }
 
+/* ===================== RICHIESTE DALLA VETRINA ===================== */
+S.requests = new Map();
+async function loadRequests(){
+  S.requests = new Map(); S.noReq = S.mode !== 'supabase';
+  if (S.noReq) return;
+  try {
+    const {data, error} = await sb.from('vetrina_requests').select('*').order('created_at', {ascending: false}).limit(500);
+    if (error) throw error;
+    S.requests = new Map((data || []).map(r => [r.id, r]));
+  } catch { S.noReq = true; }
+}
+const REQ_ST = {nuova: ['Nuova', 'c-PL'], evasa: ['Evasa', 'st-d'], annullata: ['Annullata', 'c-x']};
+const newRequests = () => [...S.requests.values()].filter(r => r.status === 'nuova');
+const contactLink = c => { const v = String(c || '').trim();
+  if (/^@?[A-Za-z0-9_]{5,32}$/.test(v) && !/^\d+$/.test(v)) return `<a href="https://t.me/${esc(v.replace(/^@/, ''))}" target="_blank" rel="noopener">${esc(v)}</a>`;
+  if (/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(v)) return `<a href="mailto:${esc(v)}">${esc(v)}</a>`;
+  const d = waNumber(v); if (d) return `<a href="https://wa.me/${d}" target="_blank" rel="noopener">${esc(v)}</a>`;
+  return esc(v); };
+const agoTxt = t => { const m = Math.round((Date.now() - new Date(t)) / 60000); return m < 1 ? 'adesso' : m < 60 ? `${m} min fa` : m < 1440 ? `${Math.round(m / 60)} ore fa` : fdate(String(t).slice(0, 10)); };
+/** copie disponibili da proporre nella vendita, secondo le quantità richieste */
+function requestCopies(r){
+  const ids = [];
+  for (const it of r.items || []){
+    let need = Number(it.qty) || 1;
+    for (const x of copiesOf(it.card_id).filter(y => y.status !== 'venduto').sort((a, b) => (a.buy_date || '').localeCompare(b.buy_date || ''))){
+      for (let i = 0; i < x.qty && need > 0; i++, need--) ids.push(x.id);
+      if (!need) break;
+    }
+  }
+  return ids;
+}
+async function setRequest(id, patch, msg){
+  const {error} = await sb.from('vetrina_requests').update(patch).eq('id', id);
+  if (error){ toast('Impossibile aggiornare la richiesta: ' + error.message, 'err'); return; }
+  Object.assign(S.requests.get(id) || {}, patch); toast(msg); render();
+}
+let RQ = 'nuova';
+function pageRequests(app){
+  if (S.noReq){ app.innerHTML = `<div class="crumbs"><a href="#/">Home</a> › <b>Richieste</b></div><h1>Richieste dalla vetrina</h1>
+    <div class="panel empty">${S.mode !== 'supabase' ? 'Le richieste arrivano solo con l\'archivio sincronizzato su Supabase.' : 'Le richieste dalla vetrina non sono ancora attive su questo archivio.'}</div>`; return; }
+  const all = [...S.requests.values()], cnt = k => all.filter(r => r.status === k).length;
+  const list = all.filter(r => RQ === 'tutte' || r.status === RQ);
+  app.innerHTML = `
+    <div class="crumbs"><a href="#/">Home</a> › <b>Richieste</b></div>
+    <div class="pagehead"><div class="grow"><h1>Richieste dalla vetrina</h1><div class="muted">Quello che i clienti hanno messo nel carrello e ti hanno mandato. Ti arrivano anche su Telegram.</div></div>
+      <button class="btn" data-act="reloadReq">↻ Aggiorna</button></div>
+    <div class="seg" id="rqf" style="margin-bottom:12px">${[['nuova', `Nuove${cnt('nuova') ? ' (' + cnt('nuova') + ')' : ''}`], ['evasa', 'Evase'], ['annullata', 'Annullate'], ['tutte', 'Tutte']].map(([v, l]) => `<button data-v="${v}" class="${RQ === v ? 'on' : ''}">${l}</button>`).join('')}</div>
+    ${!list.length ? `<div class="panel empty">${RQ === 'nuova' ? 'Nessuna richiesta nuova. Quando un cliente invia il carrello dalla vetrina, la trovi qui.' : 'Nessuna richiesta.'}</div>` : list.map(r => {
+      const items = (r.items || []).map(it => { const c = S.cards.get(it.card_id), st = c ? cardStats(c.id) : null, av = st ? st.avail : 0;
+        const locs = c ? [...new Set(copiesOf(c.id).filter(y => y.status !== 'venduto' && y.location).map(y => y.location))] : [];
+        return `<tr><td class="tc">${c ? thumbHtml(c) : ''}</td><td>${c ? `<a class="cname" href="#/c/${c.id}">${nameHtml(c.name)}</a>` : `<b>${nameHtml(it.name)}</b> <span class="small muted">(carta eliminata)</span>`} ${rarB(c?.rarity || it.rarity)}<div class="small muted">${esc(c?.expansion || it.expansion || '')}</div></td>
+          <td class="right"><b>${it.qty}</b></td><td class="right ${av < it.qty ? 'neg' : ''}">${av}${av < it.qty ? ' ⚠' : ''}</td><td class="hide-m">${locs.map(locB).join(' ')}</td></tr>`; }).join('');
+      const [sl, sc] = REQ_ST[r.status] || REQ_ST.nuova;
+      return `<div class="panel flush rq ${r.status}"><div class="panel-h"><div class="grow"><b class="rqn">${esc(r.name)}</b> <span class="b ${sc}">${sl}</span>${r.notified ? '' : ' <span class="b c-x" title="Il messaggio Telegram non è partito">Telegram non inviato</span>'}
+          <div class="small muted">📞 ${contactLink(r.contact)} · ${agoTxt(r.created_at)} · ${(r.items || []).length} ${(r.items || []).length === 1 ? 'carta' : 'carte'}, ${r.total_qty} ${r.total_qty === 1 ? 'copia' : 'copie'}</div></div>
+          <div class="acts">${r.status === 'nuova' ? `<button class="btn sm ok" data-act="reqSell" data-id="${r.id}">€ Crea vendita</button><button class="btn sm" data-act="reqDone" data-id="${r.id}">✓ Evasa</button><button class="btn sm" data-act="reqCancel" data-id="${r.id}">Annulla</button>`
+            : `<button class="btn sm" data-act="reqReopen" data-id="${r.id}">Riapri</button>`}<button class="btn sm dan" data-act="reqDel" data-id="${r.id}" title="Elimina">🗑</button></div></div>
+        ${r.note ? `<div class="rqnote">📝 ${esc(r.note)}</div>` : ''}
+        <div class="tw"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th class="right">Chieste</th><th class="right">Disponibili ora</th><th class="hide-m">Dove sono</th></tr></thead><tbody>${items}</tbody></table></div></div>`; }).join('')}`;
+  $$('#rqf button').forEach(b => b.onclick = () => { RQ = b.dataset.v; render(); });
+}
 /* ===================== STATISTICHE ===================== */
 let SG = '';
 const pctTxt = n => n == null || !isFinite(n) ? '—' : `${n >= 0 ? '' : '−'}${Math.abs(Math.round(n))}%`;
@@ -3223,7 +3314,7 @@ const ACT = {
   selLoc: () => selLocForm(),
   navMore: () => {
     const p0 = route().parts[0] || '', h = location.hash;
-    const L = [...IX.games.map(g => ['#/g/' + enc(g), g]), ['#/lotti', 'Lotti'], ['#/giacenze', 'Giacenze'], ['#/statistiche', 'Statistiche'], ['#/dati', 'Importa / Esporta']];
+    const L = [...(S.noReq ? [] : [['#/richieste', `Richieste${newRequests().length ? ' (' + newRequests().length + ')' : ''}`]]), ...IX.games.map(g => ['#/g/' + enc(g), g]), ['#/lotti', 'Lotti'], ['#/giacenze', 'Giacenze'], ['#/statistiche', 'Statistiche'], ['#/dati', 'Importa / Esporta']];
     openModal('Menu', `<div class="navmenu">${L.map(([href, l]) => `<a href="${href}" class="${h.startsWith(href) || (href === '#/lotti' && p0 === 'lotto') ? 'on' : ''}" data-close-link>${esc(l)}</a>`).join('')}</div>`, {onMount: m => { $$('a', m).forEach(a => a.addEventListener('click', () => closeModal())); }});
   },
   shipOrder: d => shipForm(d.id),
@@ -3265,6 +3356,18 @@ const ACT = {
   deleteAll: () => deleteAll(),
   settings: () => settingsModal(),
 };
+Object.assign(ACT, {
+  reloadReq: async () => { busy(true); await loadRequests(); busy(false); render(); },
+  reqDone: d => setRequest(d.id, {status: 'evasa', handled_at: new Date().toISOString()}, 'Richiesta segnata come evasa'),
+  reqCancel: d => setRequest(d.id, {status: 'annullata', handled_at: new Date().toISOString()}, 'Richiesta annullata'),
+  reqReopen: d => setRequest(d.id, {status: 'nuova', handled_at: null}, 'Richiesta riaperta'),
+  reqDel: async d => { if (!await confirmBox('Elimina richiesta', 'Eliminare questa richiesta? Le carte e le copie non vengono toccate.', 'Elimina')) return;
+    const {error} = await sb.from('vetrina_requests').delete().eq('id', d.id); if (error){ toast(error.message, 'err'); return; } S.requests.delete(d.id); toast('Richiesta eliminata'); render(); },
+  reqSell: d => { const r = S.requests.get(d.id); if (!r) return; const ids = requestCopies(r);
+    if (!ids.length){ toast('Nessuna delle carte richieste è ancora disponibile', 'err'); return; }
+    orderForm({items: ids, buyer: r.name, platform: 'Vetrina', requestId: r.id}); },
+});
+
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b || !S.user) return;
   e.preventDefault(); ACT[b.dataset.act]?.(b.dataset, b, e);

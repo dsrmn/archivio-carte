@@ -187,3 +187,30 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke all on function public.guest_info(text) from public;
 grant execute on function public.guest_info(text) to anon, authenticated;
+
+-- =============================================================
+-- Richieste dalla vetrina (carrello) — inserite solo dalla funzione vetrina-richiesta
+-- =============================================================
+create table if not exists public.vetrina_requests (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  token       text,
+  created_at  timestamptz not null default now(),
+  name        text not null,
+  contact     text not null,
+  note        text,
+  items       jsonb not null default '[]'::jsonb,   -- [{card_id, name, expansion, rarity, qty}]
+  total_qty   int  not null default 0,
+  status      text not null default 'nuova',        -- nuova | evasa | annullata
+  notified    boolean not null default false,       -- messaggio Telegram inviato
+  handled_at  timestamptz
+);
+create index if not exists vetrina_requests_user_idx on public.vetrina_requests (user_id, created_at desc);
+alter table public.vetrina_requests enable row level security;
+drop policy if exists vetrina_requests_read on public.vetrina_requests;
+create policy vetrina_requests_read on public.vetrina_requests for select to authenticated using (user_id = auth.uid());
+drop policy if exists vetrina_requests_upd on public.vetrina_requests;
+create policy vetrina_requests_upd on public.vetrina_requests for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists vetrina_requests_del on public.vetrina_requests;
+create policy vetrina_requests_del on public.vetrina_requests for delete to authenticated using (user_id = auth.uid());
+grant execute on function public.guest_stock(text) to service_role;
