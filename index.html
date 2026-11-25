@@ -349,6 +349,61 @@ a.panel.banner:hover{border-color:var(--neon)}
 .navmenu a.on{border-color:var(--neon);color:#fff}.navmenu a:hover{text-decoration:none;border-color:var(--blue)}
 @media (prefers-reduced-motion:reduce){.gcard .cimg{transition:none}}
 .auth .logo span{color:var(--neon)}
+
+/* vetrina */
+.vbadge{font-family:var(--disp);font-weight:700;font-size:12.5px;padding:4px 10px;border-radius:3px;background:linear-gradient(90deg,var(--neon),#a54dff);color:#fff;letter-spacing:.3px}
+.vetrina{max-width:1240px}
+.vhero{position:relative;padding:34px 28px 30px;margin:4px 0 18px;border:1px solid var(--line);overflow:hidden;
+  background:radial-gradient(600px 240px at 100% 0,rgba(255,61,203,.22),transparent 70%),radial-gradient(500px 260px at 0 100%,rgba(45,226,230,.16),transparent 70%),linear-gradient(180deg,#17113e,#100b2b);
+  clip-path:polygon(0 0,calc(100% - 26px) 0,100% 26px,100% 100%,26px 100%,0 calc(100% - 26px))}
+.vhero h1{font-size:40px;line-height:1.05;margin:0 0 10px;max-width:22ch;text-shadow:0 0 30px rgba(255,61,203,.35)}
+.vhero p{margin:0;max-width:60ch;font-size:15.5px}
+.vcontact{display:flex;gap:8px;margin-top:16px}
+.vtools{position:sticky;top:var(--hh,57px);z-index:15;background:rgba(11,8,32,.94);backdrop-filter:blur(8px);padding:10px 16px 8px;margin:0 -16px 6px}
+.vsearch{position:relative}.vsearch svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.vsearch input{width:100%;font-size:16px;padding:13px 14px 13px 44px;background:var(--inp);border:1px solid var(--line);border-radius:4px;color:var(--text);outline:none}
+.vsearch input:focus{border-color:var(--neon);box-shadow:0 0 0 3px rgba(255,61,203,.15)}
+.vrow{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-top:10px;flex-wrap:wrap}
+.vchips{display:flex;gap:6px;flex-wrap:wrap}
+.vchips button{font-family:var(--disp);font-weight:600;font-size:13px;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--muted);cursor:pointer}
+.vchips button:hover{color:var(--text);border-color:#5a4aa8}
+.vchips button.on{color:#0b0820;background:var(--blue);border-color:var(--blue)}
+.vchips button.on.g-ygo{background:linear-gradient(135deg,#a066ff,#e0457b);color:#fff;border-color:transparent}
+.vchips button.on.g-pkm{background:linear-gradient(135deg,#ffd23d,#ff8a3d);border-color:transparent}
+.vchips button.on.g-op{background:linear-gradient(135deg,#ff4d5e,#4d7bff);color:#fff;border-color:transparent}
+.vright{display:flex;gap:8px;align-items:center}.vright .inp{width:auto}
+#gcount{margin-top:6px;min-height:1px}
+.vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:18px}
+.vcard{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:6px;overflow:hidden;transition:border-color .15s,box-shadow .15s}
+.vcard:hover{border-color:#5a4aa8}
+.vcard.on{border-color:var(--neon);box-shadow:0 0 0 1px var(--neon),0 0 24px rgba(255,61,203,.3)}
+.vimg{all:unset;cursor:zoom-in;display:block;position:relative;width:100%;aspect-ratio:63/88;background:linear-gradient(160deg,#22184f,#120d2e)}
+.vimg.cimg{width:100%;border-radius:0;box-shadow:none}
+.vimg img{width:100%;height:100%;object-fit:cover;display:block}
+.vcard.foil .vimg::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.18) 45%,rgba(255,61,203,.16) 52%,transparent 64%);mix-blend-mode:screen;pointer-events:none}
+.vimg .qty{position:absolute;top:8px;right:8px;background:rgba(11,8,32,.88);color:#fff;font-family:var(--disp);font-weight:700;font-size:13px;padding:2px 8px;border-radius:3px;border:1px solid var(--line)}
+.vimg:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.vinfo{padding:10px 12px 12px;display:flex;flex-direction:column;gap:3px;flex:1}
+.vinfo .n{font-family:var(--disp);font-weight:700;font-size:14.5px;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.vinfo .m{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vb{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
+.vw{display:flex;gap:6px;margin-top:auto;padding-top:9px}.vinfo .vw .vwant{flex:1;justify-content:center}
+.vw .wq{width:auto;padding:3px 6px}
+.vmore{display:flex;gap:12px;align-items:center;justify-content:center;margin:22px 0}
+.vempty{text-align:center;padding:40px 16px}
+.vskel{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:18px}.vskel i{aspect-ratio:63/100;border-radius:6px;background:linear-gradient(90deg,var(--card),var(--card2),var(--card));background-size:200% 100%;animation:vsk 1.2s linear infinite}
+@keyframes vsk{to{background-position:-200% 0}}
+.vdetail{display:grid;grid-template-columns:minmax(200px,300px) 1fr;gap:24px;align-items:start}.vdetail .cimg{width:100%}
+.vdl{display:grid;grid-template-columns:auto 1fr;gap:9px 16px;margin:0}.vdl dt{color:var(--muted)}.vdl dd{margin:0}
+@media (max-width:760px){
+  .vhero{padding:22px 18px}.vhero h1{font-size:30px}
+  .vtools{position:static;margin:0 0 6px;padding:4px 0 8px;background:none;backdrop-filter:none}
+  #gbar .selin{flex-wrap:wrap;gap:6px}#gbar [data-g=copy]{display:none}
+  .vgrid,.vskel{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .vinfo{padding:8px 9px 10px}.vinfo .n{font-size:13.5px}
+  .vdetail{grid-template-columns:1fr}.vdetail .cimg{max-width:240px;margin:0 auto}
+}
+@media (prefers-reduced-motion:reduce){.vskel i{animation:none}.vcard{transition:none}}
 </style>
 </head>
 <body>
@@ -1345,7 +1400,7 @@ function drawGuestBar(){
   if (!n){ bar && bar.remove(); return; }
   if (!bar){ bar = document.createElement('div'); bar.id = 'gbar'; bar.className = 'selbar'; document.body.appendChild(bar); }
   const wa = waNumber(G.info?.whatsapp), tg = tgUser(G.info?.telegram), q = sum([...G.want.values()], v => v);
-  bar.innerHTML = `<div class="selin"><b>${n} ${n === 1 ? 'carta' : 'carte'} · ${q} ${q === 1 ? 'copia' : 'copie'}</b><div class="grow"></div>
+  bar.innerHTML = `<div class="selin"><b>${n} ${n === 1 ? 'carta' : 'carte'} · ${q} ${q === 1 ? 'copia' : 'copie'}</b><span class="small muted hide-m">nella tua richiesta</span><div class="grow"></div>
     ${wa ? '<button class="btn sm ok" data-g="wa">Chiedi su WhatsApp</button>' : ''}${tg ? '<button class="btn sm pri" data-g="tg">Chiedi su Telegram</button>' : ''}
     <button class="btn sm ${wa || tg ? '' : 'pri'}" data-g="copy">Copia la richiesta</button><button class="btn sm" data-g="clear" title="Svuota">✕</button></div>`;
   bar.onclick = async e => {
@@ -1354,48 +1409,95 @@ function drawGuestBar(){
     if (b.dataset.g === 'wa') window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
     else if (b.dataset.g === 'tg'){ await copyText(msg); toast('Richiesta copiata: incollala nella chat che si apre'); window.open(`https://t.me/${tg}`, '_blank', 'noopener'); }
     else if (b.dataset.g === 'copy'){ toast(await copyText(msg) ? 'Richiesta copiata: incollala dove vuoi' : 'Impossibile copiare', 'err'); }
-    else { G.want.clear(); $$('#glist [data-want]').forEach(x => { x.classList.remove('pri'); x.textContent = 'La voglio'; }); $$('#glist [data-wq]').forEach(x => x.remove()); drawGuestBar(); }
+    else { G.want.clear(); G.onWant && G.onWant(); drawGuestBar(); }
   };
 }
+const GV_KEY = 'cardarchive.gview';
 function renderGuest(){
   const rows = G.rows || [];
   const games = [...new Set(rows.map(r => r.game))].sort();
   const showLoc = rows.some(r => r.locations);
+  if (!G.view) G.view = localStorage.getItem(GV_KEY) === 'list' ? 'list' : 'grid';
+  if (!G.sort) G.sort = 'name';
+  const wa = waNumber(G.info?.whatsapp), tg = tgUser(G.info?.telegram);
+  const totQ = sum(rows, r => Number(r.qty));
   $('#root').innerHTML = `
   <header class="top"><div class="top-in">
     <span class="logo"><i>D</i>DSR&nbsp;<span>Archive</span></span>
-    <div class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="gq" placeholder="Cerca una carta: nome, espansione o rarità…" value="${esc(G.q)}"></div>
-    <div class="top-actions"><span class="b lotb" style="padding:4px 8px">Vetrina · sola lettura</span><button class="tbtn" id="grl" title="Aggiorna">↻</button></div>
+    <div class="grow"></div>
+    <div class="top-actions"><span class="vbadge">Vetrina</span><button class="tbtn" id="grl" title="Aggiorna">↻</button></div>
   </div></header>
-  <main id="app">
-    <div class="pagehead"><div class="grow"><h1>${esc(G.info?.title || 'Carte disponibili')}</h1><div class="muted" id="gcount"></div></div>
-      ${games.length > 1 ? `<select class="inp" id="gg" style="width:auto">${opt('', G.game, 'Tutti i giochi')}${games.map(g => opt(g, G.game)).join('')}</select>` : ''}</div>
-    ${rows.length && !G.err ? '<div class="small muted" style="margin:-6px 0 10px">Premi “La voglio” sulle carte che ti interessano e invia la richiesta.</div>' : ''}
-    <div id="glist">${G.err ? `<div class="panel empty">${esc(G.err)}</div>` : G.loading && !G.rows ? '<div class="panel empty">Caricamento…</div>' : ''}</div>
+  <main id="app" class="vetrina">
+    <section class="vhero">
+      <h1>${esc(G.info?.title || 'Carte disponibili')}</h1>
+      <p class="muted">${rows.length ? `${rows.length} ${rows.length === 1 ? 'carta' : 'carte'} e ${totQ} copie pronte da spedire. Scegli quelle che ti interessano e mandami la richiesta.` : G.err ? '' : 'Caricamento delle carte…'}</p>
+      ${wa || tg ? `<div class="vcontact">${wa ? `<a class="btn sm ok" href="https://wa.me/${wa}" target="_blank" rel="noopener">WhatsApp</a>` : ''}${tg ? `<a class="btn sm pri" href="https://t.me/${tg}" target="_blank" rel="noopener">Telegram</a>` : ''}</div>` : ''}
+    </section>
+    ${rows.length && !G.err ? `<div class="vtools">
+      <div class="vsearch"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="gq" placeholder="Cerca per nome, espansione o rarità…" value="${esc(G.q)}" autocomplete="off"></div>
+      <div class="vrow">
+        ${games.length > 1 ? `<div class="vchips" id="gg">${[['', 'Tutti']].concat(games.map(g => [g, g])).map(([v, l]) => `<button data-g="${esc(v)}" class="${G.game === v ? 'on' : ''} ${v ? gameCls(v) : ''}">${esc(l)}</button>`).join('')}</div>` : '<div></div>'}
+        <div class="vright"><select class="inp" id="gsort" title="Ordina">${[['name', 'Nome A–Z'], ['exp', 'Espansione'], ['rar', 'Rarità'], ['qty', 'Più copie']].map(([k, l]) => opt(k, G.sort, l)).join('')}</select>
+          <div class="seg" id="gview">${[['grid', '▦'], ['list', '☰']].map(([v, l]) => `<button data-v="${v}" class="${G.view === v ? 'on' : ''}" title="${v === 'grid' ? 'Griglia' : 'Lista'}">${l}</button>`).join('')}</div></div>
+      </div>
+      <div class="small muted" id="gcount"></div></div>` : ''}
+    <div id="glist">${G.err ? `<div class="panel empty">${esc(G.err)}</div>` : G.loading && !G.rows ? '<div class="vskel">' + '<i></i>'.repeat(12) + '</div>' : ''}</div>
   </main>`;
-  const wantCell = r => { const q = G.want.get(r.card_id), max = Math.min(Number(r.qty) || 1, 20);
-    return `<button class="btn sm ${q ? 'pri' : ''}" data-want="${esc(r.card_id)}">${q ? '✓ Aggiunta' : 'La voglio'}</button>${q && max > 1 ? ` <select class="inp wq" data-wq="${esc(r.card_id)}" title="Quante copie">${Array.from({length: max}, (_, i) => opt(i + 1, q, (i + 1) + '×')).join('')}</select>` : ''}`; };
+  const card = r => ({id: r.card_id, game: r.game, name: r.name, rarity: r.rarity, image_url: (r.image_url || '').replace(/#m$/, '')});
+  const badges = r => `${(r.conditions || '').split(',').filter(Boolean).map(condB).join(' ')} ${(r.languages || '').split(',').filter(Boolean).map(l => `<span class="b lang">${esc(l)}</span>`).join(' ')}`;
+  const wantCtl = (r, big) => { const q = G.want.get(r.card_id), max = Math.min(Number(r.qty) || 1, 20);
+    return `<button class="btn ${big ? '' : 'sm'} ${q ? 'pri' : ''} vwant" data-want="${esc(r.card_id)}">${q ? '✓ Nella richiesta' : 'La voglio'}</button>${q && max > 1 ? `<select class="inp wq" data-wq="${esc(r.card_id)}" title="Quante copie">${Array.from({length: max}, (_, i) => opt(i + 1, q, (i + 1) + '×')).join('')}</select>` : ''}`; };
+  let shown = 120, list = [];
   const draw = () => {
     if (G.err || !G.rows) return;
     const words = fold(G.q).split(' ').filter(Boolean);
-    const list = rows.filter(r => (!G.game || r.game === G.game) && words.every(w => fold(`${r.name} ${r.expansion} ${r.rarity}`).includes(w)))
-      .sort((a, b) => a.name.localeCompare(b.name, 'it') || (a.expansion || '').localeCompare(b.expansion || '', 'it'));
-    $('#gcount').textContent = `${list.length} ${list.length === 1 ? 'carta' : 'carte'} · ${sum(list, r => Number(r.qty))} copie${words.length ? ' trovate' : ''}`;
-    $('#glist').innerHTML = !list.length ? `<div class="panel empty">${words.length ? 'Nessuna carta trovata: non è disponibile nell\'archivio.' : 'Nessuna carta disponibile.'}</div>`
-      : `<div class="panel flush"><div class="tw"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th class="hide-m">Espansione</th><th>Rarità</th><th class="right">Disponibili</th><th class="hide-m">Condizione / lingua</th>${showLoc ? '<th class="hide-m">Posizione</th>' : ''}<th></th></tr></thead><tbody>
-        ${list.slice(0, 500).map(r => `<tr><td class="tc">${thumbHtml({id: r.card_id, game: r.game, image_url: (r.image_url || '').replace(/#m$/, '')})}</td>
-          <td><b>${esc(r.name)}</b><div class="small muted show-m">${esc(r.expansion || '')}</div>${showLoc && r.locations ? `<div class="show-m">${locB(r.locations)}</div>` : ''}</td><td class="hide-m muted">${esc(r.expansion || '—')}</td>
-          <td>${r.rarity ? `<span class="b rar">${esc(r.rarity)}</span>` : ''}</td><td class="right"><b>${r.qty}</b></td>
-          <td class="hide-m">${(r.conditions || '').split(',').filter(Boolean).map(condB).join(' ')} ${(r.languages || '').split(',').filter(Boolean).map(l => `<span class="b lang">${esc(l)}</span>`).join(' ')}</td>
-          ${showLoc ? `<td class="hide-m">${locB(r.locations)}</td>` : ''}<td class="acts nowrap" data-wc="${esc(r.card_id)}">${wantCell(r)}</td></tr>`).join('')}
-        </tbody></table></div></div>${list.length > 500 ? '<div class="small muted">Mostrate le prime 500: usa la ricerca per trovare le altre.</div>' : ''}`;
+    const cmp = {name: (a, b) => a.name.localeCompare(b.name, 'it'), exp: (a, b) => (a.expansion || '').localeCompare(b.expansion || '', 'it') || a.name.localeCompare(b.name, 'it'),
+      rar: (a, b) => (a.rarity || '~').localeCompare(b.rarity || '~', 'it') || a.name.localeCompare(b.name, 'it'), qty: (a, b) => b.qty - a.qty || a.name.localeCompare(b.name, 'it')}[G.sort];
+    list = rows.filter(r => (!G.game || r.game === G.game) && words.every(w => fold(`${r.name} ${r.expansion} ${r.rarity}`).includes(w))).sort(cmp);
+    const gc = $('#gcount'); if (gc) gc.textContent = words.length || G.game ? `${list.length} ${list.length === 1 ? 'carta trovata' : 'carte trovate'} · ${sum(list, r => Number(r.qty))} copie` : '';
+    if (!list.length){ $('#glist').innerHTML = `<div class="panel empty vempty"><b>${words.length ? 'Nessuna carta trovata: non è disponibile nell\'archivio.' : 'Nessuna carta disponibile.'}</b>${words.length && (wa || tg) ? '<div class="small muted" style="margin-top:6px">Se la cerchi, chiedimela comunque: magari posso procurarla.</div>' : ''}</div>`; return; }
+    const part = list.slice(0, shown);
+    $('#glist').innerHTML = (G.view === 'grid'
+      ? `<div class="vgrid">${part.map(r => `<div class="vcard ${G.want.has(r.card_id) ? 'on' : ''} ${FOIL_RE.test(r.rarity || '') ? 'foil' : ''}" data-wc="${esc(r.card_id)}">
+          <button class="vimg cimg" data-open="${esc(r.card_id)}" title="Vedi la carta">${bigImgHtml(card(r))}<span class="qty">×${r.qty}</span></button>
+          <div class="vinfo"><div class="n" title="${esc(r.name)}">${esc(r.name)}</div><div class="m">${esc(r.expansion || '')}</div>
+            <div class="vb">${r.rarity ? `<span class="b rar">${esc(r.rarity)}</span> ` : ''}${badges(r)}</div>${showLoc && r.locations ? `<div class="vb">${locB(r.locations)}</div>` : ''}
+            <div class="vw">${wantCtl(r)}</div></div></div>`).join('')}</div>`
+      : `<div class="panel flush"><div class="tw"><table class="t"><thead><tr><th class="tc"></th><th>Carta</th><th class="hide-m">Espansione</th><th>Rarità</th><th class="right">Copie</th><th class="hide-m">Condizione / lingua</th>${showLoc ? '<th class="hide-m">Posizione</th>' : ''}<th></th></tr></thead><tbody>
+        ${part.map(r => `<tr class="${G.want.has(r.card_id) ? 'sel' : ''}"><td class="tc">${thumbHtml(card(r))}</td>
+          <td><a href="#" class="cname" data-open="${esc(r.card_id)}">${esc(r.name)}</a><div class="small muted show-m">${esc(r.expansion || '')}</div></td><td class="hide-m muted">${esc(r.expansion || '—')}</td>
+          <td>${r.rarity ? `<span class="b rar">${esc(r.rarity)}</span>` : ''}</td><td class="right"><b>${r.qty}</b></td><td class="hide-m">${badges(r)}</td>
+          ${showLoc ? `<td class="hide-m">${locB(r.locations)}</td>` : ''}<td class="acts nowrap" data-wc="${esc(r.card_id)}">${wantCtl(r)}</td></tr>`).join('')}
+        </tbody></table></div></div>`)
+      + (list.length > shown ? `<div class="vmore"><button class="btn" id="gmore">Mostra altre ${Math.min(120, list.length - shown)} carte</button><span class="small muted">${shown} di ${list.length}</span></div>` : '');
+    $('#gmore') && ($('#gmore').onclick = () => { shown += 120; draw(); });
   };
-  let t; $('#gq').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { G.q = e.target.value; draw(); }, 150); });
-  $('#gg') && ($('#gg').onchange = e => { G.game = e.target.value; draw(); });
+  const openCard = id => {
+    const r = rows.find(x => x.card_id === id); if (!r) return;
+    openModal(r.name, `<div class="vdetail"><div class="cimg ${FOIL_RE.test(r.rarity || '') ? 'foil' : ''}">${bigImgHtml(card(r))}</div>
+      <div><dl class="vdl"><dt>Gioco</dt><dd>${esc(r.game)}</dd><dt>Espansione</dt><dd>${esc(r.expansion || '—')}</dd><dt>Rarità</dt><dd>${r.rarity ? `<span class="b rar">${esc(r.rarity)}</span>` : '—'}</dd>
+        <dt>Disponibili</dt><dd><b>${r.qty}</b> ${r.qty === 1 ? 'copia' : 'copie'}</dd><dt>Condizione</dt><dd>${(r.conditions || '').split(',').filter(Boolean).map(c => `${condB(c)} <span class="small muted">${esc(COND_LBL[c] || '')}</span>`).join('<br>') || '—'}</dd>
+        <dt>Lingua</dt><dd>${(r.languages || '').split(',').filter(Boolean).map(l => `<span class="b lang">${esc(l)}</span>`).join(' ') || '—'}</dd>${showLoc && r.locations ? `<dt>Posizione</dt><dd>${locB(r.locations)}</dd>` : ''}</dl>
+        <div class="vw" data-wc="${esc(r.card_id)}" style="margin-top:16px">${wantCtl(r, true)}</div></div></div>`, {wide: true, onMount: m => {
+      m.addEventListener('click', e => { const b = e.target.closest('[data-want]'); if (b){ toggle(b.dataset.want); $('[data-wc]', m).innerHTML = wantCtl(r, true); } });
+      m.addEventListener('change', e => { const s2 = e.target.closest('[data-wq]'); if (s2){ G.want.set(s2.dataset.wq, Number(s2.value) || 1); drawGuestBar(); } });
+    }});
+  };
+  const refresh = id => { const r = rows.find(x => x.card_id === id); [...$$('#glist [data-wc]')].filter(el => el.dataset.wc === id).forEach(el => {
+      if (el.classList.contains('vcard')){ el.classList.toggle('on', G.want.has(id)); $('.vw', el).innerHTML = wantCtl(r); } else { el.innerHTML = wantCtl(r); el.closest('tr')?.classList.toggle('sel', G.want.has(id)); } }); drawGuestBar(); };
+  const toggle = id => { G.want.has(id) ? G.want.delete(id) : G.want.set(id, 1); refresh(id); };
+  G.onWant = () => draw();
+  let t; $('#gq') && $('#gq').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { G.q = e.target.value; shown = 120; draw(); }, 150); });
+  $$('#gg [data-g]').forEach(b => b.onclick = () => { G.game = b.dataset.g; shown = 120; $$('#gg [data-g]').forEach(x => x.classList.toggle('on', x === b)); draw(); });
+  $('#gsort') && ($('#gsort').onchange = e => { G.sort = e.target.value; draw(); });
+  $$('#gview [data-v]').forEach(b => b.onclick = () => { G.view = b.dataset.v; localStorage.setItem(GV_KEY, G.view); $$('#gview [data-v]').forEach(x => x.classList.toggle('on', x === b)); draw(); });
   $('#grl').onclick = () => guestLoad();
-  const cellOf = id => [...$$('#glist [data-wc]')].find(el => el.dataset.wc === id);
-  const redraw = id => { const r = rows.find(x => x.card_id === id), el = cellOf(id); if (r && el) el.innerHTML = wantCell(r); drawGuestBar(); };
-  $('#glist').addEventListener('click', e => { const b = e.target.closest('[data-want]'); if (!b) return; const id = b.dataset.want; G.want.has(id) ? G.want.delete(id) : G.want.set(id, 1); redraw(id); });
+  document.documentElement.style.setProperty('--hh', ($('.top')?.offsetHeight || 57) + 'px');
+  $('#glist').addEventListener('click', e => {
+    const b = e.target.closest('[data-want]'); if (b){ toggle(b.dataset.want); return; }
+    const o = e.target.closest('[data-open]'); if (o){ e.preventDefault(); openCard(o.dataset.open); }
+  });
   $('#glist').addEventListener('change', e => { const s2 = e.target.closest('[data-wq]'); if (!s2) return; G.want.set(s2.dataset.wq, Number(s2.value) || 1); drawGuestBar(); });
   draw(); drawGuestBar();
 }
