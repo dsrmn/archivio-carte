@@ -158,6 +158,28 @@ async def main():
             await page.keyboard.press("Escape"); await ev("closeModal()")
         await step("Codice del set e posizione", codice_posizione)
 
+        async def grafica():
+            await go("#/")
+            check("Home: fila Ultime aggiunte con le carte", len(await page.query_selector_all(".shelf .gcard")) >= 3)
+            fonts = await ev("(async () => { await document.fonts.ready; return ['700 20px \"Chakra Petch\"', '400 15px Barlow'].map(f => document.fonts.check(f)); })()")
+            check("i caratteri del tema si caricano dal sito", fonts == [True, True], fonts)
+            await go("#/collezione"); await page.click("#fview [data-v=grid]"); await W(500)
+            n = len(await page.query_selector_all("#ctab .gcard"))
+            check("Collezione in griglia mostra le carte", n == len(await ev("[...S.cards.values()].filter(c => cardStats(c.id).avail > 0)")), n)
+            await page.click("#ctab .gcard .gck"); await W(300)
+            check("in griglia si possono selezionare le carte (senza aprirle)", await ev("SEL.size") == 1 and "collezione" in await ev("location.hash"))
+            await ev("SEL.clear(); 1"); await page.click("#fview [data-v=list]"); await W(300)
+            check("si torna alla vista a lista", len(await page.query_selector_all("#ctab tbody tr")) > 0)
+            await page.set_viewport_size({"width": 390, "height": 844}); await go("#/")
+            box = await page.eval_on_selector(".subnav", "e => { const r = e.getBoundingClientRect(); return [Math.round(r.bottom), innerHeight]; }")
+            check("telefono: menu in basso", abs(box[0] - box[1]) <= 2, box)
+            await page.click(".subnav .more"); await W(300)
+            check("telefono: Altro apre le altre voci", "Statistiche" in await page.inner_text("#modal .mbox"))
+            await page.click(".navmenu a[href='#/statistiche']"); await W(500)
+            check("telefono: dal menu Altro si apre la pagina", await ev("location.hash") == "#/statistiche" and not await page.query_selector("#modal .mbox"))
+            await page.set_viewport_size({"width": 1280, "height": 900})
+        await step("Nuova grafica", grafica)
+
         async def vendita():
             ash = await ev("[...S.copies.values()].find(c => c.status !== 'venduto' && S.cards.get(c.card_id).name.startsWith('Ash Blossom') && c.buy_price === 8).id")
             await ev(f"orderForm({{items: ['{ash}']}})"); await W(400)
