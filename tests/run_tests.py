@@ -299,6 +299,20 @@ async def main():
             await page.click("[data-act=undo]"); await W(800)
         await step("Sconto sul totale", sconto)
 
+        async def ricerca_parole():
+            exp = await ev("[...S.cards.values()].find(c => c.name.includes('Vayu')).expansion")
+            w = exp.split()[0].lower()
+            await go("#/"); await page.fill("#gsearch", f"vayu {w}"); await W(500)
+            items = await page.eval_on_selector_all(".ac .it", "els => els.map(e => e.innerText)")
+            check(f"ricerca 'vayu {w}': trova Vayu di {exp}", bool(items) and "Vayu" in items[0], items[:3])
+            await page.fill("#gsearch", "vayu espansioneinesistente"); await W(400)
+            check("parola che non c'è: nessun risultato", not await page.eval_on_selector_all(".ac .it", "els => els.length"))
+            await page.fill("#gsearch", ""); await go("#/collezione"); await page.fill("#fq", f"{w} vayu"); await W(600)
+            txt = await page.inner_text("#app")
+            check("Collezione: parole in qualsiasi ordine", "Vayu" in txt, "")
+            await page.fill("#fq", ""); await W(400)
+        await step("Ricerca per nome ed espansione", ricerca_parole)
+
         async def prezzo_totale():
             two = await ev("[...S.copies.values()].filter(c => c.status !== 'venduto' && !c.lot_id && c.buy_price != null && c.qty >= 2).slice(0, 2).map(c => c.id)")
             costs = await ev(f"{json.dumps(two)}.map(id => S.copies.get(id).buy_price)")

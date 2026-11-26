@@ -574,6 +574,9 @@ const LANG_SHORT = {'EN-US': 'EN', 'EN-EU': 'EN'};
 const langB = l => { if (!l) return ''; const k = String(l).toUpperCase(), f = FLAG_SVG[k];
   return `<span class="b lang" title="${esc(LANG_LBL[k] || l)}">${f ? `<svg class="flag" viewBox="0 0 20 14" aria-hidden="true">${f}</svg>` : ''}${esc(LANG_SHORT[k] || l)}${!f && k === 'EN' ? '<span class="lq">?</span>' : ''}</span>`; };
 const availLangs = id => [...new Set(copiesOf(id).filter(x => x.status !== 'venduto').map(x => x.language).filter(Boolean))];
+/** ricerca per parole: "vayu absolute" trova Vayu di Absolute Powerforce (ogni parola deve comparire, in qualsiasi ordine) */
+const qWords = q => fold(q).split(' ').filter(Boolean);
+const qMatch = (text, words) => { const t = fold(text); return words.every(w => t.includes(w)); };
 const langOpts = sel => LANGS.map(l => opt(l, sel, `${l} – ${LANG_LBL[l]}`)).join('');
 const RARITIES = {
   'Yu-Gi-Oh!': ['Common','Rare','Super Rare','Ultra Rare','Secret Rare','Ultimate Rare','Ghost Rare','Starlight Rare','Collector\'s Rare','Quarter Century Secret Rare','Prismatic Secret Rare','Platinum Secret Rare','Gold Rare','Premium Gold Rare','Short Print'],
@@ -1796,8 +1799,9 @@ function render(){
   $('#root').innerHTML = shell();
   autocomplete($('#gsearch'), async (q, cb) => {
     if (!q){ cb([]); return; }
-    const f = fold(q);
-    cb([...S.cards.values()].filter(c => fold(c.name).includes(f)).slice(0, 10)
+    const f = fold(q), ws = qWords(q);
+    cb([...S.cards.values()].filter(c => qMatch(`${c.name} ${c.expansion} ${c.rarity}`, ws))
+      .sort((a, b) => Number(fold(b.name).includes(f)) - Number(fold(a.name).includes(f)) || Number(qMatch(b.name, ws.slice(0, 1))) - Number(qMatch(a.name, ws.slice(0, 1))) || a.name.localeCompare(b.name)).slice(0, 10)
       .map(c => ({label: c.name, sub: `${c.game} · ${c.expansion || '—'} · ${c.rarity || '—'}`, id: c.id})));
   }, it => { location.hash = '#/c/' + it.id; });
   $('#gsearch').addEventListener('keydown', e => { if (e.key === 'Enter' && !$('.ac .it.on')){ F.q = e.target.value; F.p = 0; location.hash = '#/collezione'; render(); } });
@@ -2042,10 +2046,10 @@ function pageCollection(app){
 }
 function drawColl(){
   [...SEL].forEach(id => { if (!S.cards.has(id)) SEL.delete(id); });
-  const q = fold(F.q);
+  const q = fold(F.q), qw = qWords(F.q);
   if (F.loc && F.loc !== '__none' && !allLocs().includes(F.loc)) F.loc = '';
   const locsOf = id => copiesOf(id).filter(y => y.status !== 'venduto').map(y => y.location || '');
-  let rows = [...S.cards.values()].filter(c => (!F.game || c.game === F.game) && (!q || fold(`${c.name} ${c.expansion} ${c.rarity} ${locsOf(c.id).join(' ')}`).includes(q)))
+  let rows = [...S.cards.values()].filter(c => (!F.game || c.game === F.game) && (!q || qMatch(`${c.name} ${c.expansion} ${c.rarity} ${locsOf(c.id).join(' ')}`, qw)))
     .filter(c => !F.loc || locsOf(c.id).includes(F.loc === '__none' ? '' : F.loc))
     .filter(c => !(PV.on && PV.onlyChanged) || PV.changes.has(c.id))
     .map(c => ({c, st: cardStats(c.id)}))
@@ -2564,9 +2568,9 @@ function orderForm(pre = {}){
     $('#odisc', m).addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); applyDiscount(); } });
     f.addEventListener('input', e => { if (e.target.closest('.orow') || e.target.id === 'oadd' || e.target.id === 'odisc') return; if (e.target === E('fee')) feeTouched = true; upd(); });
     autocomplete($('#oadd', m), async (q, cb) => {
-      const fq = fold(q); if (!fq){ cb([]); return; }
+      const fq = fold(q), ws = qWords(q); if (!fq){ cb([]); return; }
       cb([...S.copies.values()].filter(x => x.status !== 'venduto').map(x => ({x, c: S.cards.get(x.card_id)}))
-        .filter(o => o.c && fold(`${o.c.name} ${o.c.expansion}`).includes(fq)).slice(0, 15)
+        .filter(o => o.c && qMatch(`${o.c.name} ${o.c.expansion} ${o.c.rarity}`, ws)).slice(0, 15)
         .map(({x, c}) => ({label: c.name, sub: `${c.expansion || '—'} · ${c.rarity || '—'} · ${x.condition || ''}${x.language ? ' ' + x.language : ''} · disponibili ${x.qty}${x.lot_id ? ' · da lotto' : ''}${x.location ? ' · 📍 ' + x.location : ''}`, id: x.id})));
     }, it => { addRow(it.id); $('#oadd', m).value = ''; drawRows(); upd(); });
     f.onsubmit = async e => {
