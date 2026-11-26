@@ -1,6 +1,6 @@
 // Service worker: permette di aprire l'app anche senza connessione.
 // Prova prima la rete (così ricevi gli aggiornamenti) e ripiega sulla copia salvata.
-const CACHE = "dsr-archive-v20";
+const CACHE = "dsr-archive-v21";
 // Immagini delle carte: salvate a parte, restano anche dopo gli aggiornamenti dell'app.
 const IMG_CACHE = "dsr-img-v1", IMG_MAX = 4000;
 const FILES = ["./", "index.html", "manifest.webmanifest", "icon.svg"];
